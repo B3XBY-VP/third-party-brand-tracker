@@ -14,23 +14,28 @@
       margin: 0;
       padding: 0;
     }
+
     header {
       display: flex;
       align-items: center;
       background-color: #4caf50;
       color: white;
       padding: 10px;
+      /* Space items across the header */
       justify-content: space-between;
       position: relative;
     }
+
     .logo {
       height: 40px;
       margin-right: 10px;
     }
+
     .admin-title {
       margin: 0;
-      margin-right: auto;
+      margin-right: auto; /* push everything else to the right */
     }
+
     .dashboard-button {
       background-color: white;
       color: #4caf50;
@@ -40,12 +45,13 @@
       font-weight: bold;
       margin-right: 15px;
     }
+
     /* User profile in top-right corner */
     .user-profile {
       display: flex;
       align-items: center;
       cursor: pointer;
-      position: relative;
+      position: relative; 
     }
     .user-name {
       margin-right: 8px;
@@ -56,12 +62,13 @@
       height: 30px;
       border-radius: 50%;
     }
+
     /* Dropdown menu for user actions (hidden by default) */
     .user-menu {
       display: none;
       position: absolute;
-      top: 50px;
-      right: 0;
+      top: 50px; /* just below the header */
+      right: 0; 
       background-color: #fff;
       color: #333;
       border: 1px solid #ccc;
@@ -80,6 +87,7 @@
     .user-menu button:hover {
       background-color: #eee;
     }
+
     .year-buttons {
       margin: 10px;
     }
@@ -88,16 +96,19 @@
       margin-right: 5px;
       cursor: pointer;
     }
+
     form {
       margin: 10px;
       display: flex;
       flex-direction: column;
       max-width: 400px;
     }
+
     form label {
       margin-top: 10px;
       font-weight: bold;
     }
+
     form input,
     form select,
     form textarea {
@@ -105,6 +116,7 @@
       padding: 5px;
       font-size: 1rem;
     }
+
     form button[type="submit"] {
       margin-top: 15px;
       padding: 10px;
@@ -115,23 +127,28 @@
       font-size: 1rem;
       border-radius: 4px;
     }
+
     h2 {
       margin-left: 10px;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
       margin: 10px;
     }
+
     table thead {
       background-color: #f2f2f2;
     }
+
     table th,
     table td {
       border: 1px solid #ddd;
       padding: 8px;
       text-align: left;
     }
+
     .delete-btn {
       background-color: red;
       color: white;
@@ -140,6 +157,7 @@
       cursor: pointer;
       border-radius: 4px;
     }
+
     .download-btn {
       background-color: #4caf50;
       color: white;
@@ -149,6 +167,7 @@
       display: inline-block;
       margin-top: 5px;
     }
+
     /* New CSS for image editing */
     .image-upload-btn {
       background-color: #4caf50;
@@ -165,9 +184,14 @@
 <body>
   <!-- HEADER WITH LOGO, TITLE, DASHBOARD BUTTON, & USER MENU -->
   <header>
+    <!-- Left: Logo & Title -->
     <img src="images/logo.png" alt="Victorian Plumbing Logo" class="logo" />
     <h1 class="admin-title">Brand Visibility Tracker - Admin Panel</h1>
+
+    <!-- Middle: Dashboard Button -->
     <a href="dashboard.html" class="dashboard-button">View Dashboard</a>
+
+    <!-- Right: User Profile & Menu -->
     <div class="user-profile" onclick="toggleUserMenu()">
       <span class="user-name">Jack Jones</span>
       <img src="images/user-icon.png" alt="User Icon" class="user-icon" />
@@ -271,26 +295,19 @@
       <option value="Tiles & Décor Banner 1">Tiles & Décor Banner 1</option>
       <option value="Tiles & Décor Banner 2">Tiles & Décor Banner 2</option>
       <option value="Tiles & Décor Banner 3">Tiles & Décor Banner 3</option>
-
-      <!-- Corrected Offers Page Tile options -->
       <option value="Offers Page Tile 1">Offers Page Tile 1</option>
-      <option value="Offers Page Tile 2">Offers Page Tile 2</option>
-      <option value="Offers Page Tile 3">Offers Page Tile 3</option>
-      <option value="Offers Page Tile 4">Offers Page Tile 4</option>
-      <option value="Offers Page Tile 5">Offers Page Tile 5</option>
-
-      <!-- Corrected Search Merch values -->
+      <option value="Offers Page Tile">Offers Page Tile 2</option>
+      <option value="Offers Page Tile">Offers Page Tile 3</option>
+      <option value="Offers Page Tile">Offers Page Tile 4</option>
+      <option value="Offers Page Tile">Offers Page Tile 5</option>
       <option value="Search Merch 1">Search Merch 1</option>
       <option value="Search Merch 2">Search Merch 2</option>
-      <option value="Search Merch 3">Search Merch 3</option>
+      <option value="search Merch 3">Search Merch 3</option>
       <option value="Search Merch 4">Search Merch 4</option>
       <option value="Search Merch 5">Search Merch 5</option>
       <option value="Search Merch 6">Search Merch 6</option>
-      <option value="Search Merch 7">Search Merch 7</option>
-      <option value="Search Merch 8">Search Merch 8</option>
+      <option value="Search Merch 7">Search Merch 8</option>
       <option value="Search Merch 9">Search Merch 9</option>
-
-      <!-- If you want a “Sale Merch 10” entry, keep it here -->
       <option value="Sale Merch 10">Sale Merch 10</option>
     </select>
 
@@ -352,8 +369,6 @@
     </tbody>
   </table>
 
-  <!-- Load (Updated) Firebase sync script BEFORE admin.js -->
-  <script type="module" src="firebaseSync.js"></script>
   <!-- Link to your external JavaScript -->
   <script src="admin.js"></script>
 
@@ -414,17 +429,17 @@
     window.addEventListener("click", function(event) {
       const menu = document.getElementById("userMenu");
       const userProfile = document.querySelector(".user-profile");
-      if (
-        event.target !== userProfile && !userProfile.contains(event.target) &&
-        event.target !== menu && !menu.contains(event.target)
-      ) {
+      if (event.target !== userProfile && !userProfile.contains(event.target)
+          && event.target !== menu && !menu.contains(event.target)) {
         menu.style.display = "none";
       }
     });
 
     // Log out function - redirect to login.html
     function logout() {
+      // Clear any session info if needed
       // sessionStorage.removeItem("adminAuth");
+      // localStorage.removeItem("someKey");
       window.location.href = "login.html";
     }
   </script>
