@@ -1,0 +1,125 @@
+Brand Visibility Tracker - README
+
+📌 Project Overview
+
+The Brand Visibility Tracker is a web-based application that allows marketing teams to manage and track brand campaigns. The project consists of an Admin Panel (for adding and managing campaigns) and a Dashboard (for visualising campaign data). The system includes filtering, sorting, exporting, and drag-and-drop reordering capabilities.
+
+📂 Project Structure
+
+📁 brand-tracker 
+│── 📄 index.html          # Admin Panel (Campaign Management)
+│── 📄 dashboard.html      # Brand Visibility Dashboard
+│── 📄 login.html          # Admin Login Page
+│── 📄 style.css           # Global Styling
+│── 📄 admin.js            # Admin Panel Logic
+│── 📄 dashboard.js        # Dashboard Logic
+│── 📁 Images              # Stores logo.png
+
+🔑 Features
+
+🔒 Authentication
+
+Admin Login: Users must enter a password (marketing123) to access the Admin Panel.
+
+Session Storage: The session remains active unless the user logs out or closes the browser.
+
+🎯 Admin Panel (index.html + admin.js)
+
+Campaign Form: Allows users to add a campaign (brand, sale month, name, type, location, dates, notes, and an image).
+
+Inline Editing: Edit campaigns directly from the table.
+
+Campaign Image Upload: Stores images in Base64 format for local persistence.
+
+Delete Functionality: Removes a campaign from storage.
+
+Year Selector: Switch between different years to manage campaigns efficiently.
+
+📊 Dashboard (dashboard.html + dashboard.js)
+
+Filter Campaigns: Filter by brand and month.
+
+Sort Table: Click column headers to sort campaigns.
+
+Draggable Rows: Rearrange campaigns with drag-and-drop (SortableJS).
+
+Export PDF: Generate a PDF summary of brand appearances.
+
+Modal Image Preview: Click on images to enlarge them.
+
+Campaign Summary: Displays brand frequency by quarter.
+
+🚀 Setup & Usage
+
+1️⃣ Running the Project
+
+Since this is a static web app, you can run it by opening index.html in your browser.
+Alternatively, you can serve the files using a local HTTP server (recommended for localStorage testing):
+
+
+
+2️⃣ Logging In
+
+Should be navigated to login.html automatically. 
+
+Enter the password marketing123.
+
+After successful login, the session is stored and will persist until you log out.
+
+3️⃣ Managing Campaigns
+
+Add a campaign using the form in the Admin Panel.
+
+Edit campaigns by clicking the edit button.
+
+Delete campaigns if needed.
+
+Navigate between years using the year selector.
+
+4️⃣ Viewing the Dashboard
+
+Click 'View Dashboard' in the Admin Panel.
+
+Apply filters for better campaign analysis.
+
+Sort data by clicking column headers.
+
+Download PDFs of campaign summaries.
+
+5️⃣ Logging Out
+
+Click the profile icon → Log out to return to the login page.
+
+🛠️ Technical Details
+
+✅ LocalStorage Usage
+
+Campaign data is stored in localStorage using the format campaigns_YYYY.
+
+This ensures campaign data persists between sessions.
+
+✅ JavaScript Libraries Used
+
+SortableJS (Drag-and-drop reordering)
+
+html2canvas & jsPDF (PDF export functionality)
+
+✅ Security Considerations
+
+Basic session handling (sessionStorage).
+
+No database or backend (this project is frontend-only).
+
+📌 Possible Future Enhancements
+
+🔹 Authentication System: Replace simple password storage with proper authentication.
+
+🔹 Database Integration: Store campaign data in a backend database.
+
+🔹 User Roles: Different access levels for marketing teams.
+
+🔹 Advanced Analytics: Visualise campaign engagement with charts.
+
+📝 Credits
+
+Developed by Jack Jones for marketing and brand management at Victorian Plumbing.

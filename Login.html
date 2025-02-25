@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>Admin Login</h1>
+    <form id="loginForm">
+        <label for="password">Enter Admin Password:</label>
+        
+        <!-- Group the password input and the toggle button -->
+        <div style="margin-bottom: 1em;">
+            <input type="password" id="password" required>
+            <button type="button" id="togglePassword">Show</button>
+        </div>
+
+        <button type="submit">Login</button>
+    </form>
+
+    <script>
+        // 1) Toggle password visibility
+        const passwordInput = document.getElementById("password");
+        const togglePasswordBtn = document.getElementById("togglePassword");
+
+        togglePasswordBtn.addEventListener("click", function () {
+            if (passwordInput.type === "password") {
+                passwordInput.type = "text";
+                togglePasswordBtn.textContent = "Hide";
+            } else {
+                passwordInput.type = "password";
+                togglePasswordBtn.textContent = "Show";
+            }
+        });
+
+        // 2) Handle login logic
+        document.getElementById("loginForm").addEventListener("submit", function(event) {
+            event.preventDefault();
+            const enteredPassword = passwordInput.value;
+            const correctPassword = "marketing123"; // Set your actual password
+
+            if (enteredPassword === correctPassword) {
+                sessionStorage.setItem("adminAuth", correctPassword); // Store authentication
+                window.location.href = "index.html"; // Redirect to Admin Panel
+            } else {
+                alert("Incorrect password!"); // Show error message
+            }
+        });
+    </script>
+
+</body>
+</html>

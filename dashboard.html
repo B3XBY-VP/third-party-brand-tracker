@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Brand Visibility Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Include SortableJS for drag and drop reordering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <style>
+    /* Additional inline styles for layout, modal, and filters */
+
+    /* Reset body */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Modal styles for image gallery */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.8);
+    }
+    .modal-content {
+      margin: 5% auto;
+      padding: 20px;
+      background: #fff;
+      width: 80%;
+      max-width: 800px;
+      position: relative;
+      text-align: center;
+    }
+    .modal-content .close {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      font-size: 28px;
+      font-weight: bold;
+      color: #aaa;
+      cursor: pointer;
+    }
+    .modal-content .close:hover {
+      color: #000;
+    }
+
+    /* If using a download icon overlay on images */
+    .campaign-image-container {
+      position: relative;
+      display: inline-block;
+    }
+    .download-icon {
+      position: absolute;
+      top: 50%;
+      right: -20px;
+      transform: translateY(-50%);
+      background-color: #32AA3C;
+      color: #fff;
+      padding: 5px;
+      border-radius: 50%;
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.8;
+      transition: opacity 0.2s ease-in-out;
+    }
+    .download-icon:hover {
+      opacity: 1;
+    }
+
+    /* Layout container for sidebar + main content */
+    .layout-container {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar styles */
+    .sidebar {
+      width: 250px;
+      background-color: #f8f8f8;
+      padding: 20px;
+      text-align: left;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+    .sidebar h3 {
+      margin-top: 0;
+    }
+    .filter-section {
+      margin-bottom: 20px;
+    }
+    .filter-section strong {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    /* Align checkboxes and text side by side using flex */
+    .filter-section label {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      cursor: pointer;
+    }
+    .filter-section label input[type="checkbox"] {
+      margin-right: 6px;
+      transform: scale(1.0);
+    }
+    .filter-section button {
+      margin-top: 5px;
+      padding: 6px 10px;
+      background-color: #ccc;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .filter-section button:hover {
+      background-color: #bbb;
+    }
+
+    /* Main content styles */
+    .main-content {
+      flex: 1;
+      padding: 20px;
+    }
+    .year-selector {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .year-selector button {
+      padding: 8px 12px;
+      margin-right: 5px;
+      cursor: pointer;
+    }
+    #dashboardData {
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 20px;
+    }
+    #dashboardTable {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #dashboardTable thead {
+      background-color: #f2f2f2;
+    }
+    #dashboardTable th,
+    #dashboardTable td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    /* Summary section styling */
+    #summarySection {
+      margin-top: 20px;
+      text-align: center;
+    }
+    #summaryTable td, #summaryTable th {
+      border: 1px solid #ddd;
+      padding: 5px 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Updated header matching index.html styling -->
+  <header style="display: flex; align-items: center; background-color: #4caf50; color: white; padding: 10px; justify-content: space-between; position: relative;">
+    <img src="images/logo.png" alt="Victorian Plumbing Logo" class="logo" style="height: 40px; margin-right: 10px;" />
+    <h1 class="dashboard-title" style="margin: 0; margin-right: auto;">Brand Visibility Dashboard</h1>
+    <!-- Using the same dashboard-button style as in index.html -->
+    <a href="index.html" class="dashboard-button" style="background-color: white; color: #4caf50; text-decoration: none; padding: 5px 10px; border-radius: 4px; font-weight: bold; margin-right: 15px;">
+      Back to Admin Panel
+    </a>
+  </header>
+
+  <div class="layout-container">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <h3>Filter By</h3>
+      
+      <!-- BRAND FILTERS -->
+      <div class="filter-section" id="brandFilterSection">
+        <strong>Brand</strong>
+        <label><input type="checkbox" name="brandFilter" value="Ideal Standard" /> Ideal Standard</label>
+        <label><input type="checkbox" name="brandFilter" value="Hansgrohe" /> Hansgrohe</label>
+        <label><input type="checkbox" name="brandFilter" value="Grohe" /> Grohe</label>
+        <label><input type="checkbox" name="brandFilter" value="Mira" /> Mira</label>
+        <label><input type="checkbox" name="brandFilter" value="Bristan" /> Bristan</label>
+        <label><input type="checkbox" name="brandFilter" value="VitrA" /> VitrA</label>
+        <label><input type="checkbox" name="brandFilter" value="Villeroy & Boch" /> Villeroy & Boch</label>
+        <label><input type="checkbox" name="brandFilter" value="Aquas" /> Aquas</label>
+        <button id="clearAllBrands">Clear Brands</button>
+      </div>
+      
+      <!-- MONTH FILTERS -->
+      <div class="filter-section" id="monthFilterSection">
+        <strong>Sale Month</strong>
+        <label><input type="checkbox" name="monthFilter" value="January" /> January</label>
+        <label><input type="checkbox" name="monthFilter" value="February" /> February</label>
+        <label><input type="checkbox" name="monthFilter" value="March" /> March</label>
+        <label><input type="checkbox" name="monthFilter" value="April" /> April</label>
+        <label><input type="checkbox" name="monthFilter" value="May" /> May</label>
+        <label><input type="checkbox" name="monthFilter" value="June" /> June</label>
+        <label><input type="checkbox" name="monthFilter" value="July" /> July</label>
+        <label><input type="checkbox" name="monthFilter" value="August" /> August</label>
+        <label><input type="checkbox" name="monthFilter" value="September" /> September</label>
+        <label><input type="checkbox" name="monthFilter" value="October" /> October</label>
+        <label><input type="checkbox" name="monthFilter" value="November" /> November</label>
+        <label><input type="checkbox" name="monthFilter" value="December" /> December</label>
+        <button id="clearAllMonths">Clear Months</button>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <!-- Year Buttons -->
+      <div class="year-selector">
+        <button onclick="showYear('2024')">2024</button>
+        <button onclick="showYear('2025')">2025</button>
+        <button onclick="showYear('2026')">2026</button>
+        <button onclick="showYear('2027')">2027</button>
+        <button onclick="showYear('2028')">2028</button>
+        <button onclick="showYear('2029')">2029</button>
+        <button onclick="showYear('2030')">2030</button>
+      </div>
+
+      <!-- Campaigns Table -->
+      <div id="dashboardData">
+        <h2 id="yearTitle">Campaigns for 2024</h2>
+        <table id="dashboardTable">
+          <thead>
+            <tr>
+              <th>Brand</th>
+              <th>Sale Month</th>
+              <th>Campaign Name</th>
+              <th>Campaign Type</th>
+              <th>Page Location</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+              <th>Engagement Notes</th>
+              <th>Campaign Image</th>
+            </tr>
+          </thead>
+          <tbody id="dashboardTableBody">
+            <!-- Rows generated dynamically by dashboard.js -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Summary Section with Export PDF Button -->
+      <div id="summarySection">
+        <h3>Brand Appearances Summary</h3>
+        <div id="summaryContent">
+          Select a year to see how often each brand appeared in Q1, Q2, etc.
+        </div>
+        <button id="exportPDFBtn">Export as PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Image Gallery -->
+  <div id="imageModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <img id="fullImage" src="" alt="Full Size Image" style="max-width:100%;">
+      <p id="imageCaption"></p>
+    </div>
+  </div>
+
+  <!-- Dashboard logic -->
+  <script src="dashboard.js"></script>
+  <!-- jsPDF and html2canvas for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+    // PDF Export functionality
+    document.getElementById('exportPDFBtn').addEventListener('click', function() {
+      html2canvas(document.getElementById('summarySection')).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save('Brand_Appearances_Summary.pdf');
+      });
+    });
+
+    // Modal functionality for image gallery
+    function openImage(url) {
+      const modal = document.getElementById('imageModal');
+      const fullImage = document.getElementById('fullImage');
+      fullImage.src = url;
+      // Clear any caption text
+      document.getElementById('imageCaption').textContent = "";
+      modal.style.display = "block";
+    }
+
+    document.querySelector('.modal .close').addEventListener('click', function() {
+      document.getElementById('imageModal').style.display = "none";
+    });
+    window.addEventListener('click', function(event) {
+      const modal = document.getElementById('imageModal');
+      if (event.target === modal) {
+        modal.style.display = "none";
+      }
+    });
+
+    // Initialize SortableJS for drag-and-drop reordering on the dashboard table rows
+    const dashboardTableBody = document.getElementById('dashboardTableBody');
+    Sortable.create(dashboardTableBody, {
+      animation: 150,  // Smooth transition effect
+      onEnd: function (evt) {
+        // evt.oldIndex: original index; evt.newIndex: new index
+        console.log(`Moved item from ${evt.oldIndex} to ${evt.newIndex}`);
+        // Capture the new order based on a data attribute (assumes each row has a "data-id")
+        const newOrder = Array.from(dashboardTableBody.children).map(row => row.getAttribute('data-id'));
+        console.log("New order of entries:", newOrder);
+        // Optionally, send the newOrder array to your server for persistence:
+        // updateDashboardOrder(newOrder);
+      }
+    });
+
+    // Example function to send the new order to your server (if needed)
+    function updateDashboardOrder(newOrder) {
+      fetch('/update-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ order: newOrder })
+      })
+      .then(response => response.json())
+      .then(data => console.log('Order updated:', data))
+      .catch(error => console.error('Error updating order:', error));
+    }
+  </script>
+</body>
+</html>
