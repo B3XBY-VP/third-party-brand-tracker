@@ -1,8 +1,15 @@
 /****************************************************
  * dashboard.js - Updated with PDF Export, Modal Gallery,
  * Date Formatting, Filtering, Sorting, Drag-and-Drop
- * Reordering, and Summary Rendering
+ * Reordering, and Summary Rendering using Firestore
  ****************************************************/
+
+import {
+  collection,
+  query,
+  where,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 
 // Global variable to store the current year
 let currentYear = "2024";
@@ -20,64 +27,71 @@ function showYear(year) {
   document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
   displayDashboardCampaigns(year);
 }
+window.showYear = showYear;
 
-// 2. Display campaigns for the selected year
+// 2. Display campaigns for the selected year from Firestore
 function displayDashboardCampaigns(year) {
   const dashboardTable = document.querySelector("#dashboardTable tbody");
   dashboardTable.innerHTML = "";
-  const campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
 
-  // If no campaigns, show a message and clear summary
-  if (campaigns.length === 0) {
-    dashboardTable.innerHTML =
-      "<tr><td colspan='9'>No campaigns available for this year.</td></tr>";
-    document.getElementById("summaryContent").textContent =
-      "No campaigns for this year.";
-    return;
-  }
+  // Query Firestore for campaigns where "year" equals the selected year
+  const q = query(collection(window.db, "campaigns"), where("year", "==", year));
+  
+  // Listen for real-time updates
+  onSnapshot(q, (snapshot) => {
+    dashboardTable.innerHTML = "";
+    const campaigns = [];
+    
+    snapshot.forEach((docSnap) => {
+      let campaign = docSnap.data();
+      campaign.id = docSnap.id; // assign Firestore document ID
+      campaigns.push(campaign);
+      
+      // Create table row for each campaign
+      const row = dashboardTable.insertRow();
+      row.setAttribute("data-id", campaign.id);
+      row.setAttribute("data-brand", campaign.brand || "");
+      row.setAttribute("data-month", campaign.saleMonth || "");
+      row.innerHTML = `
+        <td>${campaign.brand || ""}</td>
+        <td>${campaign.saleMonth || ""}</td>
+        <td>${campaign.campaignName || ""}</td>
+        <td>${campaign.campaignType || ""}</td>
+        <td>${campaign.pageLocation || ""}</td>
+        <td>${formatDateToDMY(campaign.startDate)}</td>
+        <td>${formatDateToDMY(campaign.endDate)}</td>
+        <td>${campaign.engagementNotes || ""}</td>
+        <td>
+          ${
+            campaign.imageUrl
+              ? `<div class="campaign-image-container">
+                   <img src="${campaign.imageUrl}" width="50"
+                        onclick="openImage('${campaign.imageUrl}')"
+                        alt="Campaign Image">
+                   <br>
+                   <a href="${campaign.imageUrl}"
+                      download="campaign-image.png"
+                      class="download-btn">&#x2193;</a>
+                 </div>`
+              : "No Image"
+          }
+        </td>
+      `;
+    });
 
-  // Populate table rows (each row now includes a data-id attribute for reordering)
-  campaigns.forEach((campaign, index) => {
-    const row = dashboardTable.insertRow();
-    // Use campaign.id if available, else use index as fallback
-    row.setAttribute("data-id", campaign.id ? campaign.id : index);
-    // Attach data-brand and data-month for filtering
-    row.setAttribute("data-brand", campaign.brand || "");
-    row.setAttribute("data-month", campaign.saleMonth || "");
-    // Build the row's inner HTML; format dates using formatDateToDMY()
-    row.innerHTML = `
-      <td>${campaign.brand || ""}</td>
-      <td>${campaign.saleMonth || ""}</td>
-      <td>${campaign.campaignName || ""}</td>
-      <td>${campaign.campaignType || ""}</td>
-      <td>${campaign.pageLocation || ""}</td>
-      <td>${formatDateToDMY(campaign.startDate)}</td>
-      <td>${formatDateToDMY(campaign.endDate)}</td>
-      <td>${campaign.engagementNotes || ""}</td>
-      <td>
-        ${
-          campaign.imageUrl
-            ? `<div class="campaign-image-container">
-                 <img src="${campaign.imageUrl}" width="50"
-                      onclick="openImage('${campaign.imageUrl}')"
-                      alt="Campaign Image">
-                 <br>
-                 <a href="${campaign.imageUrl}"
-                    download="campaign-image.png"
-                    class="download-btn">&#x2193;</a>
-               </div>`
-            : "No Image"
-        }
-      </td>
-    `;
+    if (campaigns.length === 0) {
+      dashboardTable.innerHTML =
+        "<tr><td colspan='9'>No campaigns available for this year.</td></tr>";
+      document.getElementById("summaryContent").textContent =
+        "No campaigns for this year.";
+    } else {
+      // Re-apply filters (brand + month) after loading
+      filterCampaigns();
+      // Compute how often each brand appeared by quarter and update summary
+      const appearances = computeBrandAppearances(campaigns);
+      displaySummary(appearances, year);
+    }
   });
-
-  // Re-apply filters (brand + month) after loading
-  filterCampaigns();
-
-  // Compute how often each brand appeared by quarter and update summary
-  const appearances = computeBrandAppearances(campaigns);
-  displaySummary(appearances, year);
 }
 
 // 3. Updated openImage function to open a modal gallery without a caption
@@ -85,10 +99,10 @@ function openImage(url) {
   const modal = document.getElementById("imageModal");
   const fullImage = document.getElementById("fullImage");
   fullImage.src = url;
-  // Clear any caption text
   document.getElementById("imageCaption").textContent = "";
   modal.style.display = "block";
 }
+window.openImage = openImage;
 
 // 4. Set up event listeners for filters, modal functionality, and column sorting
 document.addEventListener("DOMContentLoaded", () => {
@@ -118,7 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Modal close: close modal when clicking on the close button of the image modal
+  // Modal close: close modal when clicking on the close button
   const modalClose = document.querySelector(".modal .close");
   if (modalClose) {
     modalClose.addEventListener("click", () => {
@@ -274,19 +288,13 @@ function displaySummary(appearances, year) {
    9. Drag-and-Drop Reordering Update Function
    ------------------------------------------------------------ */
 
-// Update the order of campaigns in localStorage based on new order from drag-and-drop
+// Update the order of campaigns in Firestore based on new order from drag-and-drop
+// NOTE: For full persistence, each campaign document should include an "order" field.
+// This function currently logs the new order and should be extended to update Firestore.
 function updateDashboardOrder(newOrder) {
-  let campaigns = JSON.parse(localStorage.getItem(`campaigns_${currentYear}`)) || [];
-  // Create a map from id to campaign object
-  const campaignMap = {};
-  campaigns.forEach(campaign => {
-    const id = campaign.id ? campaign.id : campaigns.indexOf(campaign);
-    campaignMap[id] = campaign;
-  });
-  // Build a new ordered array based on the newOrder array
-  const newCampaigns = newOrder.map(id => campaignMap[id]).filter(c => c !== undefined);
-  // Save the new order in localStorage
-  localStorage.setItem(`campaigns_${currentYear}`, JSON.stringify(newCampaigns));
-  // Refresh the dashboard table to reflect the new order
-  displayDashboardCampaigns(currentYear);
+  console.log("New order received:", newOrder);
+  // Example: Iterate over newOrder (array of campaign IDs) and update each document's order field.
+  // newOrder.forEach((id, index) => {
+  //   updateDoc(doc(window.db, "campaigns", id), { order: index });
+  // });
 }

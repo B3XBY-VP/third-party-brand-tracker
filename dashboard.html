@@ -272,6 +272,7 @@
   </div>
 
   <!-- Load Firebase sync script BEFORE dashboard.js -->
+  <!-- firebaseSync.js now uses Firestore instead of Realtime Database -->
   <script type="module" src="firebaseSync.js"></script>
   <!-- Dashboard logic -->
   <script src="dashboard.js"></script>
@@ -298,7 +299,6 @@
       const modal = document.getElementById('imageModal');
       const fullImage = document.getElementById('fullImage');
       fullImage.src = url;
-      // Clear any caption text
       document.getElementById('imageCaption').textContent = "";
       modal.style.display = "block";
     }
@@ -316,14 +316,12 @@
     // Initialize SortableJS for drag-and-drop reordering on the dashboard table rows
     const dashboardTableBody = document.getElementById('dashboardTableBody');
     Sortable.create(dashboardTableBody, {
-      animation: 150,  // Smooth transition effect
+      animation: 150,
       onEnd: function (evt) {
-        // evt.oldIndex: original index; evt.newIndex: new index
         console.log(`Moved item from ${evt.oldIndex} to ${evt.newIndex}`);
-        // Capture the new order based on a data attribute (assumes each row has a "data-id")
         const newOrder = Array.from(dashboardTableBody.children).map(row => row.getAttribute('data-id'));
         console.log("New order of entries:", newOrder);
-        // Optionally, send the newOrder array to your server for persistence:
+        // Optionally, send newOrder to your server:
         // updateDashboardOrder(newOrder);
       }
     });
