@@ -1,10 +1,8 @@
-
 /* firebaseSync.js */
 
 // 1. Import Firebase modules from the CDN
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
-// Import Firestore (using the modular SDK)
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 
 // 2. Initialize Firebase with your project configuration
@@ -12,7 +10,6 @@ const firebaseConfig = {
   apiKey: "AIzaSyAsagt_nX44rYWCV7OC3fc8mASQJAIcM6w",
   authDomain: "third-party-brand-tracke-7009a.firebaseapp.com",
   projectId: "third-party-brand-tracke-7009a",
-  // Updated storageBucket to the standard format
   storageBucket: "third-party-brand-tracke-7009a.appspot.com",
   messagingSenderId: "994904948864",
   appId: "1:994904948864:web:a84513b825ab2501872665",
@@ -21,6 +18,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+
 // 3. Initialize Firestore
 const db = getFirestore(app);
 
@@ -28,3 +26,5 @@ const db = getFirestore(app);
 window.db = db;
 
 // 5. Additional Firestore-specific logic (e.g., listeners, writes) can be added here.
+
+export { db };

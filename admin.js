@@ -1,8 +1,26 @@
 /****************************************************
- * admin.js
+ * admin.js - Firestore Version (Real-Time Sync)
  ****************************************************/
 
-// 1. LOGIN CHECK - Redirect if not logged in
+// 1. IMPORT FIRESTORE (ES Modules)
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+
+// 2. Get Firestore instance from your firebaseSync.js
+import { db } from "./firebaseSync.js";
+
+// In-memory array of campaigns for inline editing
+let campaigns = [];
+
+/*
+  1. LOGIN CHECK - Redirect if not logged in
+*/
 document.addEventListener("DOMContentLoaded", function () {
   const correctPassword = "marketing123";
   const userPassword = sessionStorage.getItem("adminAuth");
@@ -12,41 +30,65 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
-// 2. SHOW YEAR - Called by the year buttons
+/*
+  2. SHOW YEAR - Called by the year buttons
+  Sets up a real-time listener for that year's campaigns.
+*/
 function showYear(year) {
-  // Update the heading to reflect the chosen year
   document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
-  // Display campaigns stored in localStorage for that year
-  displayCampaigns(year);
+  watchCampaigns(year); // Real-time Firestore listener
 }
 
-// 3. FORM SUBMISSION - Add a new campaign
-document.getElementById("campaignForm").addEventListener("submit", function (event) {
+/*
+  watchCampaigns(year):
+  - Attaches onSnapshot to "campaigns_YEAR" for real-time updates.
+  - Whenever Firestore data changes, onSnapshot triggers displayCampaigns().
+*/
+function watchCampaigns(year) {
+  const colRef = collection(db, `campaigns_${year}`);
+
+  // Clear existing data
+  campaigns = [];
+
+  // onSnapshot sets up a persistent listener
+  onSnapshot(colRef, (snapshot) => {
+    // Rebuild the in-memory array each time there's a change
+    campaigns = snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    }));
+    // Re-render the table
+    displayCampaigns();
+  });
+}
+
+/*
+  3. FORM SUBMISSION - Add a new campaign
+*/
+document.getElementById("campaignForm").addEventListener("submit", async function (event) {
   event.preventDefault();
 
-  // Figure out which year is currently selected from the heading
-  const yearText = document.getElementById("yearTitle").textContent; 
-  // "Campaigns for 2024" => split => ["Campaigns", "for", "2024"]
-  const selectedYear = yearText.split(" ")[2];
+  // Identify the currently displayed year from the heading
+  const yearText = document.getElementById("yearTitle").textContent;
+  const selectedYear = yearText.split(" ")[2]; // e.g., "2024"
 
-  // Gather form field values
+  // Gather form fields
   const brand = document.getElementById("brand").value;
   const saleMonth = document.getElementById("saleMonth").value;
   const campaignName = document.getElementById("campaignName").value;
   const campaignType = document.getElementById("campaignType").value;
   const pageLocation = document.getElementById("pageLocation").value;
-  const startDate = document.getElementById("startDate").value;  // "YYYY-MM-DD"
-  const endDate = document.getElementById("endDate").value;      // "YYYY-MM-DD"
+  const startDate = document.getElementById("startDate").value;
+  const endDate = document.getElementById("endDate").value;
   const engagementNotes = document.getElementById("engagementNotes").value;
   const imageFile = document.getElementById("campaignImage").files[0];
 
-  // If there's an image, convert it to Base64, then save
+  // Convert the image to Base64 if provided
   if (imageFile) {
     const reader = new FileReader();
-    reader.onload = function (e) {
-      const imageUrl = e.target.result; // Base64 string
-      saveCampaign(
-        selectedYear,
+    reader.onload = async function(e) {
+      const imageUrl = e.target.result;
+      await saveCampaignToFirestore(selectedYear, {
         brand,
         saleMonth,
         campaignName,
@@ -56,13 +98,13 @@ document.getElementById("campaignForm").addEventListener("submit", function (eve
         endDate,
         engagementNotes,
         imageUrl
-      );
+      });
+      document.getElementById("campaignForm").reset();
     };
     reader.readAsDataURL(imageFile);
   } else {
-    // No image uploaded
-    saveCampaign(
-      selectedYear,
+    // No image
+    await saveCampaignToFirestore(selectedYear, {
       brand,
       saleMonth,
       campaignName,
@@ -71,67 +113,41 @@ document.getElementById("campaignForm").addEventListener("submit", function (eve
       startDate,
       endDate,
       engagementNotes,
-      ""
-    );
+      imageUrl: ""
+    });
+    document.getElementById("campaignForm").reset();
   }
-
-  // Reset form fields
-  document.getElementById("campaignForm").reset();
 });
 
-// 4. SAVE CAMPAIGN - Store in localStorage
-function saveCampaign(
-  year,
-  brand,
-  saleMonth,
-  campaignName,
-  campaignType,
-  pageLocation,
-  startDate,
-  endDate,
-  engagementNotes,
-  imageUrl
-) {
-  // Retrieve existing campaigns for this year
-  let campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
-
-  // Push the new campaign object
-  campaigns.push({
-    brand,
-    saleMonth,
-    campaignName,
-    campaignType,
-    pageLocation,
-    startDate,       // Store in ISO (YYYY-MM-DD)
-    endDate,         // Store in ISO (YYYY-MM-DD)
-    engagementNotes,
-    imageUrl
-  });
-
-  // Save updated array back to localStorage
-  localStorage.setItem(`campaigns_${year}`, JSON.stringify(campaigns));
-
-  // Refresh the display
-  displayCampaigns(year);
+/*
+  4. SAVE CAMPAIGN - Add a new doc to Firestore
+*/
+async function saveCampaignToFirestore(year, campaignData) {
+  try {
+    const colRef = collection(db, `campaigns_${year}`);
+    await addDoc(colRef, campaignData);
+    // onSnapshot automatically refreshes displayCampaigns()
+  } catch (error) {
+    console.error("Error saving campaign:", error);
+  }
 }
 
-// 5. DATE FORMATTER - Converts "YYYY-MM-DD" to "DD/MM/YYYY"
+/*
+  5. DATE FORMATTER - Converts "YYYY-MM-DD" -> "DD/MM/YYYY"
+*/
 function formatDateToDMY(isoString) {
   if (!isoString) return "";
-  // isoString is typically "2025-02-06"
   const [year, month, day] = isoString.split("-");
-  return `${day}/${month}/${year}`; // e.g. "06/02/2025"
+  return `${day}/${month}/${year}`; 
 }
 
-// 6. DISPLAY CAMPAIGNS - Populate the table
-function displayCampaigns(year) {
+/*
+  6. DISPLAY CAMPAIGNS - Populate the table using our in-memory 'campaigns' array
+*/
+function displayCampaigns() {
   const campaignTableBody = document.querySelector("#campaignTable tbody");
   campaignTableBody.innerHTML = "";
 
-  // Load campaigns from localStorage
-  const campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
-
-  // If no campaigns, show a placeholder row
   if (campaigns.length === 0) {
     campaignTableBody.innerHTML = "<tr><td colspan='10'>No campaigns added for this year.</td></tr>";
     return;
@@ -140,84 +156,105 @@ function displayCampaigns(year) {
   // Build a row for each campaign
   campaigns.forEach((campaign, index) => {
     const row = document.createElement("tr");
-
     row.innerHTML = `
       <td>${campaign.brand || ""}</td>
       <td>${campaign.saleMonth || ""}</td>
       <td>${campaign.campaignName || ""}</td>
       <td>${campaign.campaignType || ""}</td>
       <td>${campaign.pageLocation || ""}</td>
-      <!-- Use our formatDateToDMY() for display -->
       <td>${formatDateToDMY(campaign.startDate)}</td>
       <td>${formatDateToDMY(campaign.endDate)}</td>
       <td>${campaign.engagementNotes || ""}</td>
       <td>
         ${
           campaign.imageUrl
-            ? `<img src="${campaign.imageUrl}" width="50" alt="Campaign Image" onclick="openImage('${campaign.imageUrl}')">
+            ? `<img src="${campaign.imageUrl}" width="50" alt="Campaign Image"
+                  onclick="openImage('${campaign.imageUrl}')">
                <br>
-               <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>`
+               <a href="${campaign.imageUrl}" download="campaign-image.png"
+                  class="download-btn">Download</a>`
             : "No image"
         }
       </td>
       <td>
-        <button onclick="editCampaign(${index}, '${year}')">✏️ Edit</button>
-        <button class="delete-btn" onclick="deleteCampaign(${index}, '${year}')">❌ Delete</button>
+        <button onclick="editCampaign(${index})">✏️ Edit</button>
+        <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>
       </td>
     `;
-
     campaignTableBody.appendChild(row);
   });
 }
 
-// 7. DELETE CAMPAIGN
-function deleteCampaign(index, year) {
-  let campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
-  campaigns.splice(index, 1);
-  localStorage.setItem(`campaigns_${year}`, JSON.stringify(campaigns));
-  displayCampaigns(year);
+/*
+  7. DELETE CAMPAIGN - remove the doc from Firestore
+*/
+async function deleteCampaign(index) {
+  const campaignToDelete = campaigns[index];
+  const yearText = document.getElementById("yearTitle").textContent;
+  const selectedYear = yearText.split(" ")[2];
+
+  if (!campaignToDelete?.id) {
+    console.error("No doc ID found, cannot delete.");
+    return;
+  }
+  try {
+    await deleteDoc(doc(db, `campaigns_${selectedYear}`, campaignToDelete.id));
+    // onSnapshot will update the table automatically
+  } catch (error) {
+    console.error("Error deleting campaign:", error);
+  }
 }
 
-// 8. EDIT CAMPAIGN - Inline editing of an existing row
-function editCampaign(index, year) {
-  let campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
+/*
+  8. EDIT CAMPAIGN - Inline editing of an existing row
+  We'll replace the row’s cells with input fields, referencing the in-memory array.
+*/
+function editCampaign(index) {
   const campaign = campaigns[index];
-
   const campaignTableBody = document.querySelector("#campaignTable tbody");
-  // Each row is rendered in order, so the row we want is .rows[index]
   const row = campaignTableBody.rows[index];
 
-  // Replace the row’s cells with input fields, including an image input for editing the image
   row.innerHTML = `
     <td><input type="text" id="editBrand${index}" value="${campaign.brand || ""}"></td>
     <td><input type="text" id="editSaleMonth${index}" value="${campaign.saleMonth || ""}"></td>
     <td><input type="text" id="editCampaignName${index}" value="${campaign.campaignName || ""}"></td>
     <td><input type="text" id="editCampaignType${index}" value="${campaign.campaignType || ""}"></td>
     <td><input type="text" id="editPageLocation${index}" value="${campaign.pageLocation || ""}"></td>
-    <!-- For the date inputs, keep the stored ISO format so the date picker works properly -->
     <td><input type="date" id="editStartDate${index}" value="${campaign.startDate || ""}"></td>
     <td><input type="date" id="editEndDate${index}" value="${campaign.endDate || ""}"></td>
     <td><input type="text" id="editEngagementNotes${index}" value="${campaign.engagementNotes || ""}"></td>
     <td>
       <img class="editImagePreview" src="${campaign.imageUrl || ''}" width="50" alt="Campaign Image">
       <br>
-      <input type="file" id="editImage${index}" class="editImageInput" accept="image/*" style="display: none;" onchange="updateEditImagePreview(${index}, this)">
+      <input type="file" id="editImage${index}" class="editImageInput" accept="image/*"
+             style="display: none;"
+             onchange="updateEditImagePreview(${index}, this)">
       <button type="button" onclick="triggerEditImage(this)">Change Image</button>
       <br>
       ${
         campaign.imageUrl 
-          ? `<a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>` 
+          ? `<a href="${campaign.imageUrl}" download="campaign-image.png"
+                class="download-btn">Download</a>` 
           : ""
       }
     </td>
     <td>
-      <button onclick="saveEditedCampaign(${index}, '${year}')">💾 Save</button>
-      <button onclick="cancelEdit('${year}')">Cancel</button>
+      <button onclick="saveEditedCampaign(${index})">💾 Save</button>
+      <button onclick="cancelEdit()">Cancel</button>
     </td>
   `;
 }
 
-// New function: Trigger the file input in edit mode
+/*
+  9. CANCEL EDIT - Just re-displays the table
+*/
+function cancelEdit() {
+  displayCampaigns();
+}
+
+/*
+  Trigger the file input in edit mode
+*/
 function triggerEditImage(button) {
   const row = button.closest("tr");
   const fileInput = row.querySelector(".editImageInput");
@@ -226,13 +263,14 @@ function triggerEditImage(button) {
   }
 }
 
-// New function: Update the preview image when a new file is selected in edit mode
+/*
+  Update the preview image when a new file is selected in edit mode
+*/
 function updateEditImagePreview(index, inputElement) {
   const file = inputElement.files[0];
   if (file) {
     const reader = new FileReader();
     reader.onload = function(e) {
-      // Find the corresponding preview image and update its src attribute
       const row = inputElement.closest("tr");
       const preview = row.querySelector(".editImagePreview");
       if (preview) {
@@ -243,50 +281,82 @@ function updateEditImagePreview(index, inputElement) {
   }
 }
 
-// 9. SAVE EDITED CAMPAIGN
-function saveEditedCampaign(index, year) {
-  let campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
-  const updated = campaigns[index];
+/*
+  10. SAVE EDITED CAMPAIGN
+  - Build updated object
+  - Update doc in Firestore
+*/
+async function saveEditedCampaign(index) {
+  const updated = { ...campaigns[index] }; // copy existing data
+  const yearText = document.getElementById("yearTitle").textContent;
+  const selectedYear = yearText.split(" ")[2];
 
-  // Update campaign details from input fields
   updated.brand = document.getElementById(`editBrand${index}`).value;
   updated.saleMonth = document.getElementById(`editSaleMonth${index}`).value;
   updated.campaignName = document.getElementById(`editCampaignName${index}`).value;
   updated.campaignType = document.getElementById(`editCampaignType${index}`).value;
   updated.pageLocation = document.getElementById(`editPageLocation${index}`).value;
-  updated.startDate = document.getElementById(`editStartDate${index}`).value; // still ISO
-  updated.endDate = document.getElementById(`editEndDate${index}`).value;     // still ISO
+  updated.startDate = document.getElementById(`editStartDate${index}`).value;
+  updated.endDate = document.getElementById(`editEndDate${index}`).value;
   updated.engagementNotes = document.getElementById(`editEngagementNotes${index}`).value;
 
-  // Handle updated image if a new file was selected
+  // If there's a new image
   const imageInput = document.getElementById(`editImage${index}`);
   if (imageInput && imageInput.files.length > 0) {
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
       updated.imageUrl = e.target.result;
-      // Save the updated campaign array to localStorage after image is processed
-      localStorage.setItem(`campaigns_${year}`, JSON.stringify(campaigns));
-      displayCampaigns(year);
+      await updateCampaignInFirestore(selectedYear, updated);
     };
     reader.readAsDataURL(imageInput.files[0]);
   } else {
-    // No new image selected; save other changes immediately
-    localStorage.setItem(`campaigns_${year}`, JSON.stringify(campaigns));
-    displayCampaigns(year);
+    // No new image
+    await updateCampaignInFirestore(selectedYear, updated);
   }
 }
 
-// 10. CANCEL EDIT - just re-displays the table without saving changes
-function cancelEdit(year) {
-  displayCampaigns(year);
+/*
+  updateCampaignInFirestore: updates the existing doc in Firestore
+*/
+async function updateCampaignInFirestore(year, updated) {
+  if (!updated.id) {
+    console.error("Cannot update, missing doc ID.");
+    return;
+  }
+  try {
+    const docRef = doc(db, `campaigns_${year}`, updated.id);
+    // Omit the doc ID from the actual data
+    const { id, ...dataToSave } = updated;
+    await updateDoc(docRef, dataToSave);
+    // onSnapshot refreshes displayCampaigns()
+  } catch (error) {
+    console.error("Error updating campaign:", error);
+  }
 }
 
-// 11. OPEN IMAGE IN NEW TAB
+/*
+  11. OPEN IMAGE IN NEW TAB
+*/
 function openImage(url) {
   window.open(url, "_blank");
 }
 
-// 12. DEFAULT YEAR ON LOAD
+/*
+  12. DEFAULT YEAR ON LOAD
+*/
 window.onload = function () {
   showYear("2024");
 };
+
+/*
+   Expose functions to the global scope for inline HTML event handlers
+   (if you're using <button onclick="...">).
+*/
+window.showYear = showYear;
+window.openImage = openImage;
+window.editCampaign = editCampaign;
+window.deleteCampaign = deleteCampaign;
+window.triggerEditImage = triggerEditImage;
+window.updateEditImagePreview = updateEditImagePreview;
+window.saveEditedCampaign = saveEditedCampaign;
+window.cancelEdit = cancelEdit;

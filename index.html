@@ -14,28 +14,23 @@
       margin: 0;
       padding: 0;
     }
-
     header {
       display: flex;
       align-items: center;
       background-color: #4caf50;
       color: white;
       padding: 10px;
-      /* Space items across the header */
       justify-content: space-between;
       position: relative;
     }
-
     .logo {
       height: 40px;
       margin-right: 10px;
     }
-
     .admin-title {
       margin: 0;
-      margin-right: auto; /* push everything else to the right */
+      margin-right: auto;
     }
-
     .dashboard-button {
       background-color: white;
       color: #4caf50;
@@ -45,7 +40,6 @@
       font-weight: bold;
       margin-right: 15px;
     }
-
     /* User profile in top-right corner */
     .user-profile {
       display: flex;
@@ -62,12 +56,11 @@
       height: 30px;
       border-radius: 50%;
     }
-
-    /* Dropdown menu for user actions (hidden by default) */
+    /* Dropdown menu for user actions */
     .user-menu {
       display: none;
       position: absolute;
-      top: 50px; /* just below the header */
+      top: 50px;
       right: 0; 
       background-color: #fff;
       color: #333;
@@ -87,7 +80,6 @@
     .user-menu button:hover {
       background-color: #eee;
     }
-
     .year-buttons {
       margin: 10px;
     }
@@ -96,19 +88,16 @@
       margin-right: 5px;
       cursor: pointer;
     }
-
     form {
       margin: 10px;
       display: flex;
       flex-direction: column;
       max-width: 400px;
     }
-
     form label {
       margin-top: 10px;
       font-weight: bold;
     }
-
     form input,
     form select,
     form textarea {
@@ -116,7 +105,6 @@
       padding: 5px;
       font-size: 1rem;
     }
-
     form button[type="submit"] {
       margin-top: 15px;
       padding: 10px;
@@ -127,28 +115,23 @@
       font-size: 1rem;
       border-radius: 4px;
     }
-
     h2 {
       margin-left: 10px;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
       margin: 10px;
     }
-
     table thead {
       background-color: #f2f2f2;
     }
-
     table th,
     table td {
       border: 1px solid #ddd;
       padding: 8px;
       text-align: left;
     }
-
     .delete-btn {
       background-color: red;
       color: white;
@@ -157,7 +140,6 @@
       cursor: pointer;
       border-radius: 4px;
     }
-
     .download-btn {
       background-color: #4caf50;
       color: white;
@@ -167,7 +149,6 @@
       display: inline-block;
       margin-top: 5px;
     }
-
     /* New CSS for image editing */
     .image-upload-btn {
       background-color: #4caf50;
@@ -178,20 +159,48 @@
       border-radius: 4px;
       margin-top: 5px;
     }
+    /* Saving Modal Styles */
+    .saving-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .saving-modal-content {
+      background: #fff;
+      padding: 20px 30px;
+      border-radius: 6px;
+      text-align: center;
+      display: flex;
+      align-items: center;
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      margin-left: 10px;
+      border: 3px solid #ccc;
+      border-top-color: #32AA3C;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 
 <body>
   <!-- HEADER WITH LOGO, TITLE, DASHBOARD BUTTON, & USER MENU -->
   <header>
-    <!-- Left: Logo & Title -->
     <img src="images/logo.png" alt="Victorian Plumbing Logo" class="logo" />
     <h1 class="admin-title">Brand Visibility Tracker - Admin Panel</h1>
-
-    <!-- Middle: Dashboard Button -->
     <a href="dashboard.html" class="dashboard-button">View Dashboard</a>
-
-    <!-- Right: User Profile & Menu -->
     <div class="user-profile" onclick="toggleUserMenu()">
       <span class="user-name">Jack Jones</span>
       <img src="images/user-icon.png" alt="User Icon" class="user-icon" />
@@ -369,8 +378,17 @@
     </tbody>
   </table>
 
-  <!-- Link to your external JavaScript -->
-  <script src="admin.js"></script>
+  <!-- Saving Modal -->
+  <div id="savingModal" class="saving-modal" style="display:none;">
+    <div class="saving-modal-content">
+      <span>Saving...</span>
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- Include Firebase and Admin JS as modules -->
+  <script type="module" src="firebaseSync.js"></script>
+  <script type="module" src="admin.js"></script>
 
   <!-- Inline JavaScript for image handling & user menu -->
   <script>
@@ -380,7 +398,6 @@
       let fileInput = row.querySelector(".imageUpload");
       fileInput.click();
     }
-
     document.addEventListener("change", function(event) {
       if (event.target.classList.contains("imageUpload")) {
         let row = event.target.closest("tr");
@@ -394,7 +411,6 @@
         }
       }
     });
-
     document.addEventListener("click", function(event) {
       if (event.target.classList.contains("save-btn")) {
         let row = event.target.closest("tr");
@@ -418,14 +434,11 @@
         .catch(error => console.error("Error updating campaign:", error));
       }
     });
-
     /***************** USER MENU + LOGOUT *****************/
     function toggleUserMenu() {
       const menu = document.getElementById("userMenu");
       menu.style.display = (menu.style.display === "block") ? "none" : "block";
     }
-
-    // Close the user menu if clicking outside
     window.addEventListener("click", function(event) {
       const menu = document.getElementById("userMenu");
       const userProfile = document.querySelector(".user-profile");
@@ -434,12 +447,7 @@
         menu.style.display = "none";
       }
     });
-
-    // Log out function - redirect to login.html
     function logout() {
-      // Clear any session info if needed
-      // sessionStorage.removeItem("adminAuth");
-      // localStorage.removeItem("someKey");
       window.location.href = "login.html";
     }
   </script>

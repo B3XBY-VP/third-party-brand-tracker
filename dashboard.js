@@ -1,10 +1,23 @@
 /****************************************************
- * dashboard.js - Updated with PDF Export, Modal Gallery,
- * Date Formatting, Filtering, Sorting, Drag-and-Drop
- * Reordering, and Summary Rendering
+ * dashboard.js - Firestore Version with PDF Export,
+ * Modal Gallery, Date Formatting, Filtering, Sorting,
+ * Drag-and-Drop Reordering, and Summary Rendering
  ****************************************************/
 
-// Global variable to store the current year
+import {
+  collection,
+  doc,
+  onSnapshot,
+  updateDoc,
+  orderBy,
+  query
+} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+import { db } from "./firebaseSync.js";
+
+// We'll keep all campaigns in this array (for the current year)
+let campaigns = [];
+
+// Keep track of the currently displayed year
 let currentYear = "2024";
 
 // Helper: Format ISO date (YYYY-MM-DD) to DD/MM/YYYY
@@ -14,21 +27,50 @@ function formatDateToDMY(isoString) {
   return `${day}/${month}/${year}`;
 }
 
-// 1. Switch years
+/*
+  1. Switch years
+  Sets up a real-time listener on `campaigns_{year}` to automatically refresh
+  the table whenever data changes in Firestore.
+*/
 function showYear(year) {
   currentYear = year;
   document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
-  displayDashboardCampaigns(year);
+  watchDashboardCampaigns(year);
 }
 
-// 2. Display campaigns for the selected year
-function displayDashboardCampaigns(year) {
+/*
+  watchDashboardCampaigns(year):
+  Attaches an onSnapshot listener to Firestore so data is updated in real time.
+  Optionally, if you want to always sort by an "orderIndex" field, you can do:
+     const colRef = query(collection(db, `campaigns_${year}`), orderBy("orderIndex", "asc"));
+*/
+function watchDashboardCampaigns(year) {
+  const colRef = collection(db, `campaigns_${year}`);
+  // If you want a default sort by a field, do:
+  // const colRef = query(collection(db, `campaigns_${year}`), orderBy("orderIndex"));
+
+  onSnapshot(colRef, (snapshot) => {
+    // Rebuild campaigns from Firestore
+    campaigns = snapshot.docs.map((docSnap) => {
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    });
+    // Display them
+    displayDashboardCampaigns();
+  });
+}
+
+/*
+  2. Display campaigns for the currently selected year (stored in `campaigns`).
+  This replaces the old localStorage-based approach.
+*/
+function displayDashboardCampaigns() {
   const dashboardTable = document.querySelector("#dashboardTable tbody");
   dashboardTable.innerHTML = "";
-  const campaigns = JSON.parse(localStorage.getItem(`campaigns_${year}`)) || [];
 
-  // If no campaigns, show a message and clear summary
-  if (campaigns.length === 0) {
+  if (!campaigns || campaigns.length === 0) {
     dashboardTable.innerHTML =
       "<tr><td colspan='9'>No campaigns available for this year.</td></tr>";
     document.getElementById("summaryContent").textContent =
@@ -36,15 +78,16 @@ function displayDashboardCampaigns(year) {
     return;
   }
 
-  // Populate table rows (each row now includes a data-id attribute for reordering)
+  // Populate table rows
   campaigns.forEach((campaign, index) => {
     const row = dashboardTable.insertRow();
-    // Use campaign.id if available, else use index as fallback
-    row.setAttribute("data-id", campaign.id ? campaign.id : index);
+    // If you have an `orderIndex` in Firestore, use that; else fallback to index
+    const rowId = campaign.id || index;
+    row.setAttribute("data-id", rowId);
     // Attach data-brand and data-month for filtering
     row.setAttribute("data-brand", campaign.brand || "");
     row.setAttribute("data-month", campaign.saleMonth || "");
-    // Build the row's inner HTML; format dates using formatDateToDMY()
+
     row.innerHTML = `
       <td>${campaign.brand || ""}</td>
       <td>${campaign.saleMonth || ""}</td>
@@ -72,25 +115,28 @@ function displayDashboardCampaigns(year) {
     `;
   });
 
-  // Re-apply filters (brand + month) after loading
+  // Re-apply brand/month filters
   filterCampaigns();
 
-  // Compute how often each brand appeared by quarter and update summary
+  // Compute brand appearances by quarter and update summary
   const appearances = computeBrandAppearances(campaigns);
-  displaySummary(appearances, year);
+  displaySummary(appearances, currentYear);
 }
 
-// 3. Updated openImage function to open a modal gallery without a caption
+/*
+  3. Updated openImage function - opens the modal gallery
+*/
 function openImage(url) {
   const modal = document.getElementById("imageModal");
   const fullImage = document.getElementById("fullImage");
   fullImage.src = url;
-  // Clear any caption text
   document.getElementById("imageCaption").textContent = "";
   modal.style.display = "block";
 }
 
-// 4. Set up event listeners for filters, modal functionality, and column sorting
+/*
+  4. On DOMContentLoaded, set up brand/month filters, modal close, column sorting
+*/
 document.addEventListener("DOMContentLoaded", () => {
   // BRAND filters
   const brandCheckboxes = document.querySelectorAll('input[name="brandFilter"]');
@@ -118,14 +164,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Modal close: close modal when clicking on the close button of the image modal
+  // Modal close handlers
   const modalClose = document.querySelector(".modal .close");
   if (modalClose) {
     modalClose.addEventListener("click", () => {
       document.getElementById("imageModal").style.display = "none";
     });
   }
-  // Also close modal if clicking outside the modal content
   window.addEventListener("click", (event) => {
     const modal = document.getElementById("imageModal");
     if (event.target === modal) {
@@ -133,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Set up column sorting by attaching click listeners to table headers
+  // Column sorting
   const headers = document.querySelectorAll("#dashboardTable thead th");
   headers.forEach((header, index) => {
     header.style.cursor = "pointer";
@@ -143,7 +188,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// 5. Combined filter function for brand and month
+/*
+  5. Combined filter function for brand and month
+*/
 function filterCampaigns() {
   const brandCheckboxes = document.querySelectorAll('input[name="brandFilter"]');
   const checkedBrands = Array.from(brandCheckboxes)
@@ -167,14 +214,16 @@ function filterCampaigns() {
   });
 }
 
-// 6. Column Sorting: Sort table rows by header column
-const sortDirections = {}; // To store sort direction for each column
+/*
+  6. Column Sorting
+*/
+const sortDirections = {}; // Track current direction per column
 function sortTableByColumn(columnIndex) {
   const table = document.getElementById("dashboardTable");
   const tbody = table.querySelector("tbody");
   let rows = Array.from(tbody.querySelectorAll("tr"));
 
-  // Toggle sort direction for this column
+  // Toggle sort direction
   const currentDir = sortDirections[columnIndex] || "asc";
   const newDir = currentDir === "asc" ? "desc" : "asc";
   sortDirections[columnIndex] = newDir;
@@ -187,19 +236,21 @@ function sortTableByColumn(columnIndex) {
     return 0;
   });
 
-  // Rebuild tbody with sorted rows
+  // Rebuild table body with sorted rows
   tbody.innerHTML = "";
-  rows.forEach(row => tbody.appendChild(row));
+  rows.forEach((row) => tbody.appendChild(row));
 }
 
-// 7. Default year on window load
+/*
+  7. Default year on window load
+*/
 window.onload = function () {
   showYear("2024");
 };
 
 /* ------------------------------------------------------------
    8. QUARTER COUNTING + SUMMARY RENDERING
-   ------------------------------------------------------------ */
+------------------------------------------------------------ */
 
 // Convert month to quarter (Q1, Q2, Q3, Q4)
 function getQuarterFromMonth(monthName) {
@@ -227,7 +278,7 @@ function computeBrandAppearances(campaigns) {
   return brandQuarterCounts;
 }
 
-// Render the summary as a neat table (without bullet points)
+// Render summary table
 function displaySummary(appearances, year) {
   const summaryContent = document.getElementById("summaryContent");
   if (!appearances || Object.keys(appearances).length === 0) {
@@ -271,22 +322,30 @@ function displaySummary(appearances, year) {
 }
 
 /* ------------------------------------------------------------
-   9. Drag-and-Drop Reordering Update Function
-   ------------------------------------------------------------ */
+   9. Drag-and-Drop Reordering
+   ------------------------------------------------------------ 
+   If you want to store the new order in Firestore, add an 
+   "orderIndex" field to each doc. 
+*/
 
-// Update the order of campaigns in localStorage based on new order from drag-and-drop
-function updateDashboardOrder(newOrder) {
-  let campaigns = JSON.parse(localStorage.getItem(`campaigns_${currentYear}`)) || [];
-  // Create a map from id to campaign object
-  const campaignMap = {};
-  campaigns.forEach(campaign => {
-    const id = campaign.id ? campaign.id : campaigns.indexOf(campaign);
-    campaignMap[id] = campaign;
-  });
-  // Build a new ordered array based on the newOrder array
-  const newCampaigns = newOrder.map(id => campaignMap[id]).filter(c => c !== undefined);
-  // Save the new order in localStorage
-  localStorage.setItem(`campaigns_${currentYear}`, JSON.stringify(newCampaigns));
-  // Refresh the dashboard table to reflect the new order
-  displayDashboardCampaigns(currentYear);
+// Example drag-and-drop update function
+async function updateDashboardOrder(newOrder) {
+  // Here, you'd iterate over newOrder and update each doc's `orderIndex`.
+  // For example:
+  /*
+     newOrder.forEach(async (docId, idx) => {
+       const docRef = doc(db, `campaigns_${currentYear}`, docId);
+       await updateDoc(docRef, { orderIndex: idx });
+     });
+  */
+  // Then Firestore onSnapshot will deliver the updated sorting.
+  // If you only want local re-sorting, just reorder `campaigns` in memory.
+
+  console.log("New order of entries:", newOrder);
+  // For local-only reorder: you could reorder `campaigns` in memory and call displayDashboardCampaigns().
 }
+
+// Expose functions for inline calls
+window.showYear = showYear;
+window.openImage = openImage;
+window.updateDashboardOrder = updateDashboardOrder;
