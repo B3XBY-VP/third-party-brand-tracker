@@ -167,7 +167,7 @@
       width: 100%;
       height: 100%;
       background: rgba(0,0,0,0.4);
-      display: flex;
+      display: none; /* Hidden by default */
       align-items: center;
       justify-content: center;
       z-index: 9999;
@@ -200,7 +200,11 @@
   <header>
     <img src="images/logo.png" alt="Victorian Plumbing Logo" class="logo" />
     <h1 class="admin-title">Brand Visibility Tracker - Admin Panel</h1>
+
+    <!-- Button to view Dashboard -->
     <a href="dashboard.html" class="dashboard-button">View Dashboard</a>
+
+    <!-- User Profile Menu -->
     <div class="user-profile" onclick="toggleUserMenu()">
       <span class="user-name">Jack Jones</span>
       <img src="images/user-icon.png" alt="User Icon" class="user-icon" />
@@ -212,7 +216,6 @@
 
   <!-- YEAR SELECTION BUTTONS -->
   <div class="year-buttons">
-    <button class="year-btn" onclick="showYear('2024')">2024</button>
     <button class="year-btn" onclick="showYear('2025')">2025</button>
     <button class="year-btn" onclick="showYear('2026')">2026</button>
     <button class="year-btn" onclick="showYear('2027')">2027</button>
@@ -222,12 +225,13 @@
   </div>
 
   <!-- Current Year Title -->
-  <h2 id="yearTitle">Campaigns for 2024</h2>
+  <h2 id="yearTitle">Campaigns for 2025</h2>
 
   <!-- ADMIN FORM -->
   <form id="campaignForm">
     <label for="brand">Brand:</label>
-    <select id="brand">
+    <select id="brand" required>
+      <option value="">-- Select a Brand --</option>
       <option value="Ideal Standard">Ideal Standard</option>
       <option value="Hansgrohe">Hansgrohe</option>
       <option value="Grohe">Grohe</option>
@@ -240,6 +244,7 @@
 
     <label for="saleMonth">Sale Month:</label>
     <select id="saleMonth">
+      <option value="">-- Select a Month --</option>
       <option value="January">January</option>
       <option value="February">February</option>
       <option value="March">March</option>
@@ -254,7 +259,7 @@
       <option value="December">December</option>
     </select>
 
-    <label for="campaignName">Campaign Name:</label>
+    <label for="campaignName">Campaign Name (required):</label>
     <input type="text" id="campaignName" required />
 
     <label for="campaignType">Campaign Type:</label>
@@ -267,7 +272,8 @@
 
     <label for="pageLocation">Page Location:</label>
     <select id="pageLocation">
-      <option value="Trade App Homepage (Deal of the Week)">Trade App Homepage (Deal of the Week)</option>
+      <!-- Long list of page locations -->
+<option value="Trade App Homepage (Deal of the Week)">Trade App Homepage (Deal of the Week)</option>
       <option value="Homepage Tile 1">Homepage Tile 1</option>
       <option value="Homepage Tile 2">Homepage Tile 2</option>
       <option value="Homepage Tile 3">Homepage Tile 3</option>
@@ -320,10 +326,10 @@
       <option value="Sale Merch 10">Sale Merch 10</option>
     </select>
 
-    <label for="startDate">Start Date:</label>
+    <label for="startDate">Start Date (required):</label>
     <input type="date" id="startDate" required />
 
-    <label for="endDate">End Date:</label>
+    <label for="endDate">End Date (required):</label>
     <input type="date" id="endDate" required />
 
     <label for="engagementNotes">Engagement Notes:</label>
@@ -386,7 +392,10 @@
     </div>
   </div>
 
-  <!-- Include Firebase and Admin JS as modules -->
+  <!-- Toast Container (for success/error messages) -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ES Modules: Firebase + Admin Logic -->
   <script type="module" src="firebaseSync.js"></script>
   <script type="module" src="admin.js"></script>
 
@@ -398,6 +407,7 @@
       let fileInput = row.querySelector(".imageUpload");
       fileInput.click();
     }
+
     document.addEventListener("change", function(event) {
       if (event.target.classList.contains("imageUpload")) {
         let row = event.target.closest("tr");
@@ -411,6 +421,7 @@
         }
       }
     });
+
     document.addEventListener("click", function(event) {
       if (event.target.classList.contains("save-btn")) {
         let row = event.target.closest("tr");
@@ -419,9 +430,11 @@
         if (fileInput.files.length > 0) {
           formData.append("image", fileInput.files[0]);
         }
-        // Append other campaign details as needed
+        // Example: append other details from the row if needed
         formData.append("brand", row.cells[0].innerText);
         formData.append("campaignName", row.cells[2].innerText);
+
+        // Example upload endpoint
         fetch("upload-handler.php", {
           method: "POST",
           body: formData
@@ -434,11 +447,14 @@
         .catch(error => console.error("Error updating campaign:", error));
       }
     });
+
     /***************** USER MENU + LOGOUT *****************/
     function toggleUserMenu() {
       const menu = document.getElementById("userMenu");
       menu.style.display = (menu.style.display === "block") ? "none" : "block";
     }
+
+    // Close the user menu if clicking outside
     window.addEventListener("click", function(event) {
       const menu = document.getElementById("userMenu");
       const userProfile = document.querySelector(".user-profile");
@@ -447,6 +463,7 @@
         menu.style.display = "none";
       }
     });
+
     function logout() {
       window.location.href = "login.html";
     }

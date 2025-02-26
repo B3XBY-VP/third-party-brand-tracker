@@ -1,7 +1,8 @@
 /****************************************************
  * dashboard.js - Firestore Version with PDF Export,
  * Modal Gallery, Date Formatting, Filtering, Sorting,
- * Drag-and-Drop Reordering, and Summary Rendering
+ * Search, Pagination, Drag-and-Drop Reordering,
+ * Summary Rendering, and Error Handling / Loading Spinner
  ****************************************************/
 
 import {
@@ -14,77 +15,115 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 import { db } from "./firebaseSync.js";
 
-// We'll keep all campaigns in this array (for the current year)
+// In-memory array of all campaigns for the current year
 let campaigns = [];
-
 // Keep track of the currently displayed year
-let currentYear = "2024";
+let currentYear = "2025";
 
-// Helper: Format ISO date (YYYY-MM-DD) to DD/MM/YYYY
+// If you want to show a loading spinner until the first Firestore snapshot arrives
+let isFirstLoad = true;
+
+// SEARCH + PAGINATION
+let searchKeyword = "";   // text to search brand or campaignName
+let currentPage = 1;      // current page for pagination
+const pageSize = 10;      // how many items per page
+
+/* 
+  Helper: Format ISO date (YYYY-MM-DD) -> DD/MM/YYYY
+*/
 function formatDateToDMY(isoString) {
   if (!isoString) return "";
   const [year, month, day] = isoString.split("-");
   return `${day}/${month}/${year}`;
 }
 
-/*
-  1. Switch years
-  Sets up a real-time listener on `campaigns_{year}` to automatically refresh
-  the table whenever data changes in Firestore.
+/* 
+  1. showYear(year):
+  Sets up a real-time listener on `campaigns_{year}`.
+  We'll display a loading spinner until the first snapshot arrives.
 */
 function showYear(year) {
   currentYear = year;
   document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
+  isFirstLoad = true;
+  showLoadingModal();
   watchDashboardCampaigns(year);
 }
 
-/*
+/* 
   watchDashboardCampaigns(year):
-  Attaches an onSnapshot listener to Firestore so data is updated in real time.
-  Optionally, if you want to always sort by an "orderIndex" field, you can do:
-     const colRef = query(collection(db, `campaigns_${year}`), orderBy("orderIndex", "asc"));
+  Attaches onSnapshot to Firestore so data is updated in real time.
 */
 function watchDashboardCampaigns(year) {
+  // If you have an orderIndex field in your docs, you can do:
+  // const colRef = query(collection(db, `campaigns_${year}`), orderBy("orderIndex", "asc"));
   const colRef = collection(db, `campaigns_${year}`);
-  // If you want a default sort by a field, do:
-  // const colRef = query(collection(db, `campaigns_${year}`), orderBy("orderIndex"));
 
   onSnapshot(colRef, (snapshot) => {
-    // Rebuild campaigns from Firestore
-    campaigns = snapshot.docs.map((docSnap) => {
-      return {
+    try {
+      campaigns = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
-      };
-    });
-    // Display them
-    displayDashboardCampaigns();
+      }));
+      displayDashboardCampaigns();
+      if (isFirstLoad) {
+        hideLoadingModal();
+        isFirstLoad = false;
+      }
+    } catch (error) {
+      console.error("Error reading dashboard data:", error);
+      showErrorToast("Failed to load campaigns. Please try again.");
+      hideLoadingModal();
+    }
+  }, (err) => {
+    // Error callback
+    console.error("onSnapshot error:", err);
+    showErrorToast("Firestore error: " + err.message);
+    hideLoadingModal();
   });
 }
 
-/*
-  2. Display campaigns for the currently selected year (stored in `campaigns`).
-  This replaces the old localStorage-based approach.
+/* 
+  2. displayDashboardCampaigns
+  Renders the campaigns array into #dashboardTable,
+  applying search + pagination + brand/month filters.
 */
 function displayDashboardCampaigns() {
-  const dashboardTable = document.querySelector("#dashboardTable tbody");
-  dashboardTable.innerHTML = "";
+  const dashboardTableBody = document.querySelector("#dashboardTable tbody");
+  dashboardTableBody.innerHTML = "";
 
-  if (!campaigns || campaigns.length === 0) {
-    dashboardTable.innerHTML =
-      "<tr><td colspan='9'>No campaigns available for this year.</td></tr>";
-    document.getElementById("summaryContent").textContent =
-      "No campaigns for this year.";
+  // A) Apply search filter
+  let filtered = campaigns;
+  if (searchKeyword) {
+    const kw = searchKeyword.toLowerCase();
+    filtered = filtered.filter(c => {
+      const brandMatch = c.brand && c.brand.toLowerCase().includes(kw);
+      const nameMatch = c.campaignName && c.campaignName.toLowerCase().includes(kw);
+      return brandMatch || nameMatch;
+    });
+  }
+
+  // B) Pagination
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  if (currentPage > totalPages) currentPage = totalPages || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const pageItems = filtered.slice(startIndex, startIndex + pageSize);
+
+  // If pageItems is empty after filters, show a placeholder row
+  if (pageItems.length === 0) {
+    dashboardTableBody.innerHTML = `<tr><td colspan='9'>No campaigns match your criteria.</td></tr>`;
+    document.getElementById("summaryContent").textContent = "No campaigns for this query.";
+    updatePaginationInfo(totalItems, totalPages);
     return;
   }
 
-  // Populate table rows
-  campaigns.forEach((campaign, index) => {
-    const row = dashboardTable.insertRow();
-    // If you have an `orderIndex` in Firestore, use that; else fallback to index
-    const rowId = campaign.id || index;
+  // Render the pageItems
+  pageItems.forEach((campaign, index) => {
+    const row = dashboardTableBody.insertRow();
+    // For drag-and-drop, use the doc ID or fallback index
+    const rowId = campaign.id || (startIndex + index);
     row.setAttribute("data-id", rowId);
-    // Attach data-brand and data-month for filtering
     row.setAttribute("data-brand", campaign.brand || "");
     row.setAttribute("data-month", campaign.saleMonth || "");
 
@@ -115,16 +154,20 @@ function displayDashboardCampaigns() {
     `;
   });
 
-  // Re-apply brand/month filters
-  filterCampaigns();
+  // Re-apply brand/month filters (on the rendered rows)
+  filterCampaigns(); 
 
-  // Compute brand appearances by quarter and update summary
-  const appearances = computeBrandAppearances(campaigns);
+  // Summary for the entire filtered array, not just pageItems
+  const appearances = computeBrandAppearances(filtered);
   displaySummary(appearances, currentYear);
+
+  // Update pagination UI
+  updatePaginationInfo(totalItems, totalPages);
 }
 
-/*
-  3. Updated openImage function - opens the modal gallery
+/* 
+  3. openImage(url):
+  Opens the modal gallery to view an image
 */
 function openImage(url) {
   const modal = document.getElementById("imageModal");
@@ -134,37 +177,32 @@ function openImage(url) {
   modal.style.display = "block";
 }
 
-/*
-  4. On DOMContentLoaded, set up brand/month filters, modal close, column sorting
+/* 
+  4. Set up brand/month filters, modal close, column sorting
 */
 document.addEventListener("DOMContentLoaded", () => {
-  // BRAND filters
+  // brand + month filters + sorting are already set below
   const brandCheckboxes = document.querySelectorAll('input[name="brandFilter"]');
   const clearBrandsBtn = document.getElementById("clearAllBrands");
-  brandCheckboxes.forEach((cb) => {
-    cb.addEventListener("change", filterCampaigns);
-  });
+  brandCheckboxes.forEach((cb) => cb.addEventListener("change", filterCampaigns));
   if (clearBrandsBtn) {
     clearBrandsBtn.addEventListener("click", () => {
-      brandCheckboxes.forEach((cb) => (cb.checked = false));
+      brandCheckboxes.forEach(cb => cb.checked = false);
       filterCampaigns();
     });
   }
 
-  // MONTH filters
   const monthCheckboxes = document.querySelectorAll('input[name="monthFilter"]');
   const clearMonthsBtn = document.getElementById("clearAllMonths");
-  monthCheckboxes.forEach((cb) => {
-    cb.addEventListener("change", filterCampaigns);
-  });
+  monthCheckboxes.forEach((cb) => cb.addEventListener("change", filterCampaigns));
   if (clearMonthsBtn) {
     clearMonthsBtn.addEventListener("click", () => {
-      monthCheckboxes.forEach((cb) => (cb.checked = false));
+      monthCheckboxes.forEach(cb => cb.checked = false);
       filterCampaigns();
     });
   }
 
-  // Modal close handlers
+  // modal close
   const modalClose = document.querySelector(".modal .close");
   if (modalClose) {
     modalClose.addEventListener("click", () => {
@@ -188,88 +226,107 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-/*
-  5. Combined filter function for brand and month
+/* 
+  5. setSearchKeyword(keyword):
+  Stores the user's search text, resets to page 1, re-displays.
+*/
+function setSearchKeyword(keyword) {
+  searchKeyword = keyword.toLowerCase();
+  currentPage = 1; // reset to first page
+  displayDashboardCampaigns();
+}
+
+/* 
+  6. Pagination: prevPage(), nextPage(), updatePaginationInfo
+*/
+function nextPage() {
+  currentPage++;
+  displayDashboardCampaigns();
+}
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    displayDashboardCampaigns();
+  }
+}
+function updatePaginationInfo(totalItems, totalPages) {
+  const pageInfo = document.getElementById("pageInfo");
+  if (pageInfo) {
+    pageInfo.innerText = `Page ${currentPage} of ${totalPages} (Total: ${totalItems})`;
+  }
+}
+
+/* 
+  7. filterCampaigns():
+  Brand + Month filters on the already rendered table rows
 */
 function filterCampaigns() {
   const brandCheckboxes = document.querySelectorAll('input[name="brandFilter"]');
-  const checkedBrands = Array.from(brandCheckboxes)
-    .filter((cb) => cb.checked)
-    .map((cb) => cb.value);
+  const checkedBrands = Array.from(brandCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
 
   const monthCheckboxes = document.querySelectorAll('input[name="monthFilter"]');
-  const checkedMonths = Array.from(monthCheckboxes)
-    .filter((cb) => cb.checked)
-    .map((cb) => cb.value);
+  const checkedMonths = Array.from(monthCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
 
   const rows = document.querySelectorAll("#dashboardTable tbody tr");
-  rows.forEach((row) => {
+  rows.forEach(row => {
     const rowBrand = row.getAttribute("data-brand") || "";
     const rowMonth = row.getAttribute("data-month") || "";
-    const passBrand =
-      checkedBrands.length === 0 || checkedBrands.includes(rowBrand);
-    const passMonth =
-      checkedMonths.length === 0 || checkedMonths.includes(rowMonth);
-    row.style.display = passBrand && passMonth ? "" : "none";
+    const passBrand = (checkedBrands.length === 0) || checkedBrands.includes(rowBrand);
+    const passMonth = (checkedMonths.length === 0) || checkedMonths.includes(rowMonth);
+    row.style.display = (passBrand && passMonth) ? "" : "none";
   });
 }
 
-/*
-  6. Column Sorting
+/* 
+  8. Column Sorting
 */
-const sortDirections = {}; // Track current direction per column
+const sortDirections = {};
 function sortTableByColumn(columnIndex) {
   const table = document.getElementById("dashboardTable");
   const tbody = table.querySelector("tbody");
   let rows = Array.from(tbody.querySelectorAll("tr"));
 
-  // Toggle sort direction
   const currentDir = sortDirections[columnIndex] || "asc";
-  const newDir = currentDir === "asc" ? "desc" : "asc";
+  const newDir = (currentDir === "asc") ? "desc" : "asc";
   sortDirections[columnIndex] = newDir;
 
   rows.sort((a, b) => {
     const cellA = a.cells[columnIndex].innerText.toLowerCase();
     const cellB = b.cells[columnIndex].innerText.toLowerCase();
-    if (cellA < cellB) return newDir === "asc" ? -1 : 1;
-    if (cellA > cellB) return newDir === "asc" ? 1 : -1;
+    if (cellA < cellB) return (newDir === "asc") ? -1 : 1;
+    if (cellA > cellB) return (newDir === "asc") ? 1 : -1;
     return 0;
   });
 
-  // Rebuild table body with sorted rows
   tbody.innerHTML = "";
-  rows.forEach((row) => tbody.appendChild(row));
+  rows.forEach(row => tbody.appendChild(row));
 }
 
-/*
-  7. Default year on window load
+/* 
+  9. Default year on window load
 */
-window.onload = function () {
-  showYear("2024");
+window.onload = function() {
+  showYear("2025");
 };
 
-/* ------------------------------------------------------------
-   8. QUARTER COUNTING + SUMMARY RENDERING
------------------------------------------------------------- */
-
-// Convert month to quarter (Q1, Q2, Q3, Q4)
+/* 
+  10. QUARTER COUNTING + SUMMARY RENDERING
+*/
 function getQuarterFromMonth(monthName) {
-  const month = (monthName || "").toLowerCase();
-  if (["january", "february", "march"].includes(month)) return "Q1";
-  if (["april", "may", "june"].includes(month)) return "Q2";
-  if (["july", "august", "september"].includes(month)) return "Q3";
-  if (["october", "november", "december"].includes(month)) return "Q4";
+  const m = (monthName || "").toLowerCase();
+  if (["january","february","march"].includes(m)) return "Q1";
+  if (["april","may","june"].includes(m)) return "Q2";
+  if (["july","august","september"].includes(m)) return "Q3";
+  if (["october","november","december"].includes(m)) return "Q4";
   return null;
 }
-
-// Tally brand appearances by quarter
-function computeBrandAppearances(campaigns) {
+function computeBrandAppearances(camps) {
   const brandQuarterCounts = {};
-  campaigns.forEach((campaign) => {
-    const brand = campaign.brand || "Unknown";
-    const quarter = getQuarterFromMonth(campaign.saleMonth);
+  camps.forEach((c) => {
+    const brand = c.brand || "Unknown";
+    const quarter = getQuarterFromMonth(c.saleMonth);
     if (!brandQuarterCounts[brand]) {
-      brandQuarterCounts[brand] = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+      brandQuarterCounts[brand] = { Q1:0, Q2:0, Q3:0, Q4:0 };
     }
     if (quarter) {
       brandQuarterCounts[brand][quarter]++;
@@ -277,8 +334,6 @@ function computeBrandAppearances(campaigns) {
   });
   return brandQuarterCounts;
 }
-
-// Render summary table
 function displaySummary(appearances, year) {
   const summaryContent = document.getElementById("summaryContent");
   if (!appearances || Object.keys(appearances).length === 0) {
@@ -321,31 +376,61 @@ function displaySummary(appearances, year) {
   summaryContent.innerHTML = html;
 }
 
-/* ------------------------------------------------------------
-   9. Drag-and-Drop Reordering
-   ------------------------------------------------------------ 
-   If you want to store the new order in Firestore, add an 
-   "orderIndex" field to each doc. 
+/* 
+  11. Drag-and-Drop Reordering 
 */
-
-// Example drag-and-drop update function
 async function updateDashboardOrder(newOrder) {
-  // Here, you'd iterate over newOrder and update each doc's `orderIndex`.
-  // For example:
-  /*
-     newOrder.forEach(async (docId, idx) => {
-       const docRef = doc(db, `campaigns_${currentYear}`, docId);
-       await updateDoc(docRef, { orderIndex: idx });
-     });
-  */
-  // Then Firestore onSnapshot will deliver the updated sorting.
-  // If you only want local re-sorting, just reorder `campaigns` in memory.
-
   console.log("New order of entries:", newOrder);
-  // For local-only reorder: you could reorder `campaigns` in memory and call displayDashboardCampaigns().
+  /*
+  // If storing new order in Firestore using an orderIndex:
+  for (let idx = 0; idx < newOrder.length; idx++) {
+    const docId = newOrder[idx];
+    const docRef = doc(db, `campaigns_${currentYear}`, docId);
+    await updateDoc(docRef, { orderIndex: idx });
+  }
+  */
 }
 
-// Expose functions for inline calls
+/* 
+   12. Spinner & Toast Helpers
+*/
+function showLoadingModal() {
+  const modal = document.getElementById("loadingModal");
+  if (modal) modal.style.display = "flex";
+}
+function hideLoadingModal() {
+  const modal = document.getElementById("loadingModal");
+  if (modal) modal.style.display = "none";
+}
+
+function showSuccessToast(message) {
+  createToast(message, "toast-success");
+}
+function showErrorToast(message) {
+  createToast(message, "toast-error");
+}
+function createToast(message, className) {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = `toast-message ${className}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // Auto-remove after 3s
+  setTimeout(() => {
+    if (container.contains(toast)) {
+      container.removeChild(toast);
+    }
+  }, 3000);
+}
+
+/* 
+   13. Expose Functions for Inline Handlers
+*/
 window.showYear = showYear;
 window.openImage = openImage;
 window.updateDashboardOrder = updateDashboardOrder;
+window.setSearchKeyword = setSearchKeyword;  // For the search bar
+window.prevPage = prevPage;                 // For pagination
+window.nextPage = nextPage;                 // For pagination

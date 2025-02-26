@@ -1,56 +1,6 @@
 /* === BRAND STYLING FOR DASHBOARD & ADMIN PANEL === */
 
-/* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600&display=swap');
-
-/* Global Styles */
-body {
-    font-family: 'Source Sans Pro', sans-serif;
-    background-color: #f4f4f4;
-    color: #333;
-    text-align: center;
-    padding: 20px;
-    margin: 0;
-}
-
-/* HEADER STYLING - Logo Left, Title Center, Button Right */
-header {
-    background: #32AA3C;
-    color: white;
-    padding: 15px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    text-align: center;
-    width: 90%;
-    margin: auto;
-    position: relative;
-}
-
-/* VP Logo - Left Side */
-.logo {
-    max-width: 250px;
-    height: auto;
-    margin-left: 10px;
-}
-
-/* Admin Panel Title - Centered */
-.admin-title {
-    font-size: 24px;
-    font-weight: bold;
-    flex-grow: 1;
-    text-align: center;
-}
-
-/* Dashboard Title */
-.dashboard-title {
-    color: white;
-}
-
-/* === VICTORIAN PLUMBING BRAND STYLING === */
-
-/* If you have a specific Typekit or font URL for Filson Soft, 
-   replace this @import with your actual link. */
+/* Import Google Fonts (fallback). Replace with Filson Soft as needed */
 @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600&display=swap');
 
 /* Example fallback if Filson Soft isn't available:
@@ -69,11 +19,12 @@ html, body {
 
 body {
     padding-bottom: 40px;
+    background-color: #f4f4f4; /* Light background if you prefer */
 }
 
 /* === HEADER STYLING === */
 header {
-    background: #32AA3C;
+    background: #32AA3C; /* VP Green */
     color: #fff;
     padding: 15px 20px;
     display: flex;
@@ -81,11 +32,13 @@ header {
     justify-content: space-between;
     width: 90%;
     margin: 0 auto;
+    position: relative;
 }
 
 .logo {
     max-width: 220px;
     height: auto;
+    margin-left: 10px;
 }
 
 .admin-title, 
@@ -93,8 +46,10 @@ header {
     font-size: 1.8rem;
     font-weight: 600;
     margin: 0 auto;
+    color: #fff; 
 }
 
+/* DASHBOARD BUTTON */
 .dashboard-button {
     background-color: #fff;
     color: #32AA3C;
@@ -113,7 +68,7 @@ header {
     border: 2px solid #fff;
 }
 
-/* === YEAR BUTTONS / SELECTORS === */
+/* YEAR BUTTONS / SELECTORS */
 .year-buttons, 
 .year-selector {
     margin: 20px auto;
@@ -123,7 +78,7 @@ header {
 
 .year-btn, 
 .year-selector button {
-    background-color: #32AA3C;
+    background-color: #32AA3C; 
     color: #fff;
     border: none;
     padding: 10px 20px;
@@ -139,7 +94,7 @@ header {
     background-color: #28A54B;
 }
 
-/* === FORM STYLING (Admin Panel) === */
+/* FORM STYLING (Admin Panel) */
 form {
     background: #fff;
     padding: 20px;
@@ -186,7 +141,7 @@ form button[type="submit"]:hover {
     background-color: #28A54B;
 }
 
-/* === TABLE STYLING === */
+/* TABLE STYLING */
 table {
     width: 90%;
     margin: 20px auto;
@@ -198,7 +153,7 @@ table {
 }
 
 thead {
-    background-color: #32AA3C;
+    background-color: #32AA3C; /* Keep the header in VP Green */
 }
 
 th {
@@ -220,7 +175,7 @@ tr:last-child td {
     border-bottom: none;
 }
 
-/* === IMAGES (Campaign Thumbnails) === */
+/* IMAGES (Campaign Thumbnails) */
 img {
     max-width: 60px;
     height: auto;
@@ -234,9 +189,10 @@ img:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* === ACTION BUTTONS (Admin Panel) === */
+/* ACTION BUTTONS (Admin Panel) */
+/* Use Sale Red (#CF0010) for destructive actions (Delete) */
 .delete-btn {
-    background-color: #CC0000;
+    background-color: #CF0010;
     color: #fff;
     border: none;
     padding: 8px 12px;
@@ -247,9 +203,10 @@ img:hover {
 }
 
 .delete-btn:hover {
-    background-color: #B80000;
+    background-color: #B8000C;
 }
 
+/* For file downloads, maybe Finance Blue or keep your original color */
 .download-btn {
     display: inline-block;
     background-color: #1864B7;
@@ -266,7 +223,7 @@ img:hover {
     background-color: #10498B;
 }
 
-/* === RESPONSIVE DESIGN === */
+/* RESPONSIVE DESIGN */
 @media (max-width: 768px) {
     header {
         flex-direction: column;
@@ -292,7 +249,7 @@ img:hover {
     }
 }
 
-/* Force the table header background to VP Green */
+/* Force the table header background to VP Green (redundant, but ensures brand color) */
 thead {
   background-color: #32AA3C !important;
 }
@@ -305,7 +262,7 @@ thead th {
   font-size: 14px;
 }
 
-/* === SIDEBAR & FILTER SECTION STYLES === */
+/* SIDEBAR & FILTER SECTION STYLES */
 .sidebar {
   width: 250px;
   background-color: #f8f8f8;
@@ -354,13 +311,13 @@ thead th {
   background-color: #bbb;
 }
 
-/* === LAYOUT CONTAINER FOR SIDEBAR + MAIN CONTENT === */
+/* LAYOUT CONTAINER FOR SIDEBAR + MAIN CONTENT */
 .layout-container {
   display: flex;
   min-height: 100vh;
 }
 
-/* === MODAL STYLES FOR IMAGE GALLERY === */
+/* MODAL STYLES FOR IMAGE GALLERY */
 .modal {
   display: none;
   position: fixed;
@@ -392,17 +349,15 @@ thead th {
   color: #aaa;
   cursor: pointer;
 }
-
 .modal-content .close:hover {
   color: #000;
 }
 
-/* === DOWNLOAD ICON (if using an overlay download icon on campaign images) === */
+/* DOWNLOAD ICON (if using an overlay download icon on campaign images) */
 .campaign-image-container {
   position: relative;
   display: inline-block;
 }
-
 .download-icon {
   position: absolute;
   top: 50%;
@@ -417,12 +372,11 @@ thead th {
   opacity: 0.8;
   transition: opacity 0.2s ease-in-out;
 }
-
 .download-icon:hover {
   opacity: 1;
 }
 
-/* === NEW: USER MENU STYLES === */
+/* NEW: USER MENU STYLES */
 .user-profile {
   display: flex;
   align-items: center;
@@ -454,7 +408,6 @@ thead th {
   padding: 5px;
   z-index: 999;
 }
-
 .user-menu button {
   background-color: transparent;
   border: none;
@@ -463,8 +416,69 @@ thead th {
   text-align: left;
   cursor: pointer;
 }
-
 .user-menu button:hover {
   background-color: #eee;
+}
+
+/* === SAVING / LOADING MODAL === */
+.saving-modal {
+  position: fixed;
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  display: none; /* Hidden by default */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.saving-modal-content {
+  background: #fff;
+  padding: 20px 30px;
+  border-radius: 6px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+}
+.spinner {
+  width: 24px;
+  height: 24px;
+  margin-left: 10px;
+  border: 3px solid #ccc;
+  border-top-color: #32AA3C;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* === TOAST CONTAINER AND MESSAGES === */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+}
+.toast-message {
+  padding: 10px 15px;
+  border-radius: 5px;
+  color: #fff;
+  animation: fadeOut 3s forwards;
+}
+@keyframes fadeOut {
+  0%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.toast-success {
+  background-color: #4caf50; /* or use a brand color, e.g., #0080B9 for Finance Blue */
+}
+.toast-error {
+  background-color: #f44336; /* or #CF0010 if you want Sale Red for errors */
 }
 
