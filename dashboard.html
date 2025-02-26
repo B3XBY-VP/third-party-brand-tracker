@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Brand Visibility Dashboard</title>
   <link rel="stylesheet" href="style.css" />
+
   <!-- Include SortableJS for drag and drop reordering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
   <style>
@@ -271,8 +272,9 @@
     </div>
   </div>
 
-  <!-- Dashboard logic -->
-  <script src="dashboard.js"></script>
+  <!-- Load Dashboard JS as an ES module -->
+  <script type="module" src="dashboard.js"></script>
+
   <!-- jsPDF and html2canvas for PDF export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -296,7 +298,6 @@
       const modal = document.getElementById('imageModal');
       const fullImage = document.getElementById('fullImage');
       fullImage.src = url;
-      // Clear any caption text
       document.getElementById('imageCaption').textContent = "";
       modal.style.display = "block";
     }
@@ -304,6 +305,7 @@
     document.querySelector('.modal .close').addEventListener('click', function() {
       document.getElementById('imageModal').style.display = "none";
     });
+
     window.addEventListener('click', function(event) {
       const modal = document.getElementById('imageModal');
       if (event.target === modal) {
@@ -311,23 +313,29 @@
       }
     });
 
-    // Initialize SortableJS for drag-and-drop reordering on the dashboard table rows
+    // Initialize SortableJS for drag-and-drop on the dashboard table
     const dashboardTableBody = document.getElementById('dashboardTableBody');
     Sortable.create(dashboardTableBody, {
       animation: 150,  // Smooth transition effect
       onEnd: function (evt) {
         // evt.oldIndex: original index; evt.newIndex: new index
         console.log(`Moved item from ${evt.oldIndex} to ${evt.newIndex}`);
-        // Capture the new order based on a data attribute (assumes each row has a "data-id")
+        // Each row has "data-id" set by dashboard.js (the Firestore doc ID or fallback).
         const newOrder = Array.from(dashboardTableBody.children).map(row => row.getAttribute('data-id'));
         console.log("New order of entries:", newOrder);
-        // Optionally, send the newOrder array to your server for persistence:
+
+        // If you want to store the new order in Firestore, call:
         // updateDashboardOrder(newOrder);
       }
     });
 
-    // Example function to send the new order to your server (if needed)
+    // Example function to send the new order to your server or Firestore
     function updateDashboardOrder(newOrder) {
+      // For Firestore approach, you'd do something like:
+      // newOrder.forEach((docId, idx) => {
+      //   const docRef = doc(db, `campaigns_${currentYear}`, docId);
+      //   updateDoc(docRef, { orderIndex: idx });
+      // });
       fetch('/update-order', {
         method: 'POST',
         headers: {
