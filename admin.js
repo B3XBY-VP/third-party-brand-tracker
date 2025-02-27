@@ -79,7 +79,7 @@ let campaigns = [];
    SHOW YEAR - Called by the year buttons
 ----------------------------------- */
 function showYear(year) {
-  document.getElementById("yearTitle").textContent = Campaigns for ${year};
+  document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
   watchCampaigns(year);
 }
 window.showYear = showYear;
@@ -89,7 +89,7 @@ window.showYear = showYear;
    Attaches a real-time listener to "campaigns_YEAR"
 ----------------------------------- */
 function watchCampaigns(year) {
-  const colRef = collection(db, campaigns_${year});
+  const colRef = collection(db, `campaigns_${year}`);
   campaigns = [];
   onSnapshot(colRef, (snapshot) => {
     campaigns = snapshot.docs.map((docSnap) => ({
@@ -194,7 +194,7 @@ if (document.getElementById("campaignForm")) {
 ----------------------------------- */
 async function saveCampaignToFirestore(year, campaignData) {
   try {
-    const colRef = collection(db, campaigns_${year});
+    const colRef = collection(db, `campaigns_${year}`);
     await addDoc(colRef, campaignData);
     showSuccessToast("Campaign saved successfully!");
   } catch (error) {
@@ -209,7 +209,7 @@ async function saveCampaignToFirestore(year, campaignData) {
 function formatDateToDMY(isoString) {
   if (!isoString) return "";
   const [year, month, day] = isoString.split("-");
-  return ${day}/${month}/${year};
+  return `${day}/${month}/${year}`;
 }
 
 /* -----------------------------------
@@ -228,9 +228,9 @@ function displayCampaigns() {
   campaigns.forEach((campaign, index) => {
     const row = document.createElement("tr");
     const actionsHTML = (currentUserRole === "admin") ?
-      <button onclick="editCampaign(${index})">✏️ Edit</button>
-       <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button> : "";
-    row.innerHTML = 
+      `<button onclick="editCampaign(${index})">✏️ Edit</button>
+       <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>` : "";
+    row.innerHTML = `
       <td>${campaign.brand || ""}</td>
       <td>${campaign.saleMonth || ""}</td>
       <td>${campaign.campaignName || ""}</td>
@@ -241,15 +241,15 @@ function displayCampaigns() {
       <td>${campaign.engagementNotes || ""}</td>
       <td>
         ${campaign.imageUrl
-          ? <img src="${campaign.imageUrl}" width="50" alt="Campaign Image" onclick="openImage('${campaign.imageUrl}')">
+          ? `<img src="${campaign.imageUrl}" width="50" alt="Campaign Image" onclick="openImage('${campaign.imageUrl}')">
              <br>
-             <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>
+             <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>`
           : "No image"}
       </td>
       <td>
         ${actionsHTML}
       </td>
-    ;
+    `;
     campaignTableBody.appendChild(row);
   });
 }
@@ -269,7 +269,7 @@ async function deleteCampaign(index) {
   }
   showSavingModal();
   try {
-    await deleteDoc(docFS(db, campaigns_${selectedYear}, campaignToDelete.id));
+    await deleteDoc(docFS(db, `campaigns_${selectedYear}`, campaignToDelete.id));
     showSuccessToast("Campaign deleted successfully!");
   } catch (error) {
     console.error("Error deleting campaign:", error);
@@ -291,7 +291,7 @@ function editCampaign(index) {
   const campaignTableBody = document.querySelector("#campaignTable tbody");
   const row = campaignTableBody.rows[index];
 
-  row.innerHTML = 
+  row.innerHTML = `
     <td><input type="text" id="editBrand${index}" value="${campaign.brand || ""}"></td>
     <td><input type="text" id="editSaleMonth${index}" value="${campaign.saleMonth || ""}"></td>
     <td><input type="text" id="editCampaignName${index}" value="${campaign.campaignName || ""}"></td>
@@ -306,13 +306,13 @@ function editCampaign(index) {
       <input type="file" id="editImage${index}" class="editImageInput" accept="image/*" style="display: none;" onchange="updateEditImagePreview(${index}, this)">
       <button type="button" onclick="triggerEditImage(this)">Change Image</button>
       <br>
-      ${campaign.imageUrl ? <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a> : ""}
+      ${campaign.imageUrl ? `<a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>` : ""}
     </td>
     <td>
       <button onclick="saveEditedCampaign(${index})">💾 Save</button>
       <button onclick="cancelEdit()">Cancel</button>
     </td>
-  ;
+  `;
 }
 
 /* -----------------------------------
@@ -358,14 +358,14 @@ async function saveEditedCampaign(index) {
   const yearText = document.getElementById("yearTitle").textContent;
   const selectedYear = yearText.split(" ")[2];
 
-  updated.brand = document.getElementById(editBrand${index}).value;
-  updated.saleMonth = document.getElementById(editSaleMonth${index}).value;
-  updated.campaignName = document.getElementById(editCampaignName${index}).value;
-  updated.campaignType = document.getElementById(editCampaignType${index}).value;
-  updated.pageLocation = document.getElementById(editPageLocation${index}).value;
-  updated.startDate = document.getElementById(editStartDate${index}).value;
-  updated.endDate = document.getElementById(editEndDate${index}).value;
-  updated.engagementNotes = document.getElementById(editEngagementNotes${index}).value;
+  updated.brand = document.getElementById(`editBrand${index}`).value;
+  updated.saleMonth = document.getElementById(`editSaleMonth${index}`).value;
+  updated.campaignName = document.getElementById(`editCampaignName${index}`).value;
+  updated.campaignType = document.getElementById(`editCampaignType${index}`).value;
+  updated.pageLocation = document.getElementById(`editPageLocation${index}`).value;
+  updated.startDate = document.getElementById(`editStartDate${index}`).value;
+  updated.endDate = document.getElementById(`editEndDate${index}`).value;
+  updated.engagementNotes = document.getElementById(`editEngagementNotes${index}`).value;
 
   // Basic validation
   if (!updated.brand || !updated.campaignName || !updated.startDate || !updated.endDate) {
@@ -377,7 +377,7 @@ async function saveEditedCampaign(index) {
     return;
   }
 
-  const imageInput = document.getElementById(editImage${index});
+  const imageInput = document.getElementById(`editImage${index}`);
   showSavingModal();
   try {
     if (imageInput && imageInput.files.length > 0) {
@@ -408,7 +408,7 @@ async function updateCampaignInFirestore(year, updated) {
     return;
   }
   try {
-    const docRef = docFS(db, campaigns_${year}, updated.id);
+    const docRef = docFS(db, `campaigns_${year}`, updated.id);
     const { id, ...dataToSave } = updated;
     await updateDoc(docRef, dataToSave);
     showSuccessToast("Campaign updated successfully!");
@@ -456,7 +456,7 @@ function createToast(message, className) {
   const container = document.getElementById("toastContainer");
   if (!container) return;
   const toast = document.createElement("div");
-  toast.className = toast-message ${className};
+  toast.className = `toast-message ${className}`;
   toast.textContent = message;
   container.appendChild(toast);
   setTimeout(() => {
