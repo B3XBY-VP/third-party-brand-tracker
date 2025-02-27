@@ -2,16 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin - User Roles</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Admin Panel: Manage User Roles</title>
   <link rel="stylesheet" href="style.css">
   <style>
+    /* Basic styling for the admin role update page */
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
       background-color: #f4f4f4;
     }
-    h1, p {
+    h1 {
+      text-align: center;
+    }
+    p {
       text-align: center;
     }
     table {
@@ -29,7 +33,7 @@
     }
     th {
       background-color: #32AA3C;
-      color: white;
+      color: #fff;
     }
     .btn {
       padding: 6px 10px;
@@ -38,6 +42,7 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      margin-right: 4px;
     }
     .btn:hover {
       background-color: #45a049;
@@ -46,6 +51,7 @@
       text-align: center;
       margin-top: 20px;
     }
+    /* Toast container and messages */
     .toast-container {
       position: fixed;
       bottom: 20px;
@@ -77,131 +83,169 @@
 </head>
 <body>
   <h1>Admin Panel: Manage User Roles</h1>
-  <p>Only admins can update user roles.</p>
+  <p>Only admins can update user roles. <br>(Delete button hidden for <strong>jjones544800@gmail.com</strong>)</p>
 
+  <!-- Table to display user documents -->
   <table id="usersTable">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Current Role</th>
-        <th>New Role</th>
-        <th>Action</th>
+        <th>NAME</th>
+        <th>EMAIL</th>
+        <th>CURRENT ROLE</th>
+        <th>NEW ROLE</th>
+        <th>ACTION</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+      <!-- User rows will be inserted here dynamically -->
+    </tbody>
   </table>
-
-  <div id="loadingIndicator" class="loading" style="display: none;">Loading users...</div>
+  
+  <div id="loadingIndicator" class="loading" style="display: none;">
+    Loading users...
+  </div>
+  
+  <!-- Toast container for notifications -->
   <div id="toastContainer" class="toast-container"></div>
 
+  <!-- Firebase + Firestore + Auth imports -->
   <script type="module">
     import { auth, db } from "./firebaseSync.js";
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
-    import { collection, doc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+    import {
+      collection,
+      doc,
+      getDocs,
+      getDoc,
+      updateDoc,
+      deleteDoc
+    } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 
-    const usersTableBody = document.querySelector("#usersTable tbody");
+    const SUPER_ADMIN_EMAIL = "jjones544800@gmail.com"; // The special email that can't be deleted
 
-    // Check if the logged-in user is an admin
-    async function checkAdmin(user) {
+    // Check authentication and role
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "login.html";
-        return;
-      }
-
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
-        if (userData.role !== "admin") {
-          alert("Access denied. You do not have admin privileges.");
-          window.location.href = "index.html";
-        } else {
-          fetchUsers();
-        }
       } else {
-        alert("User data not found. Contact support.");
-        window.location.href = "login.html";
+        // Check if user is admin
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            const { role } = userDocSnap.data();
+            if (role !== "admin") {
+              alert("Access denied. You do not have admin privileges.");
+              window.location.href = "index.html"; // or dashboard.html
+            } else {
+              // If the user is admin, load all user documents
+              loadUsers();
+            }
+          } else {
+            alert("User data not found. Contact support.");
+            window.location.href = "login.html";
+          }
+        } catch (error) {
+          console.error("Error fetching user role:", error);
+          alert("Error verifying user role.");
+          window.location.href = "login.html";
+        }
       }
-    }
+    });
 
-    // Fetch users in real time
-    function fetchUsers() {
-      usersTableBody.innerHTML = "";
+    // Load all users from Firestore
+    async function loadUsers() {
       const loadingIndicator = document.getElementById("loadingIndicator");
       loadingIndicator.style.display = "block";
+      const usersTableBody = document.querySelector("#usersTable tbody");
+      usersTableBody.innerHTML = "";
 
-      const colRef = collection(db, "users");
-      
-      onSnapshot(colRef, (snapshot) => {
-        usersTableBody.innerHTML = "";
-        snapshot.forEach((docSnap) => {
+      try {
+        const colRef = collection(db, "users");
+        const querySnapshot = await getDocs(colRef);
+
+        querySnapshot.forEach((docSnap) => {
           const userData = docSnap.data();
+          const userId = docSnap.id;
+
           const tr = document.createElement("tr");
-          
           tr.innerHTML = `
-            <td>${userData.displayName || "N/A"}</td>
+            <td>${userData.name || "N/A"}</td>
             <td>${userData.email || "N/A"}</td>
             <td>${userData.role || "N/A"}</td>
             <td>
-              <select class="newRoleSelect" data-userid="${docSnap.id}">
-                <option value="admin" ${userData.role === "admin" ? "selected" : ""}>Admin</option>
-                <option value="editor" ${userData.role === "editor" ? "selected" : ""}>Editor</option>
+              <select class="newRoleSelect">
+                <option value="admin"  ${userData.role === "admin" ? "selected" : ""}>Admin</option>
                 <option value="viewer" ${userData.role === "viewer" ? "selected" : ""}>Viewer</option>
               </select>
             </td>
-            <td><button class="btn updateRoleBtn" data-userid="${docSnap.id}">Update</button></td>
+            <td>
+              <button class="btn" onclick="updateUserRole('${userId}', this)">Update</button>
+              ${
+                // Show a Delete button for everyone EXCEPT the super-admin email
+                userData.email !== SUPER_ADMIN_EMAIL
+                  ? `<button class="btn" style="background-color:red;" onclick="deleteUser('${userId}')">Delete</button>`
+                  : ""
+              }
+            </td>
           `;
-
           usersTableBody.appendChild(tr);
         });
-
-        // Add event listeners after rows are created
-        document.querySelectorAll(".updateRoleBtn").forEach(button => {
-          button.addEventListener("click", async (event) => {
-            const userId = event.target.dataset.userid;
-            const newRole = document.querySelector(`.newRoleSelect[data-userid='${userId}']`).value;
-            await updateUserRole(userId, newRole);
-          });
-        });
-
-        loadingIndicator.style.display = "none";
-      }, (error) => {
+      } catch (error) {
         console.error("Error loading users:", error);
         showToast("Error loading users. Please try again.", "toast-error");
-      });
+      } finally {
+        loadingIndicator.style.display = "none";
+      }
     }
 
-    // Update user role in Firestore
-    async function updateUserRole(userId, newRole) {
+    // Update a user's role in Firestore
+    window.updateUserRole = async function(userId, button) {
+      const row = button.closest("tr");
+      const newRole = row.querySelector(".newRoleSelect").value;
+
       try {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { role: newRole });
         showToast("User role updated successfully!", "toast-success");
+        // Optionally reload the table to refresh the current role display:
+        loadUsers();
       } catch (error) {
         console.error("Error updating user role:", error);
         showToast("Failed to update user role. Please try again.", "toast-error");
       }
-    }
+    };
 
-    // Toast helper function for notifications
+    // Delete user (remove their document) from Firestore
+    window.deleteUser = async function(userId) {
+      if (!confirm("Are you sure you want to delete this user? This cannot be undone.")) {
+        return;
+      }
+      try {
+        const userDocRef = doc(db, "users", userId);
+        await deleteDoc(userDocRef);
+        showToast("User account deleted!", "toast-success");
+        loadUsers(); // Refresh the table
+      } catch (error) {
+        console.error("Error deleting user:", error);
+        showToast("Failed to delete user. Please try again.", "toast-error");
+      }
+    };
+
+    // Toast helper
     function showToast(message, className) {
       const container = document.getElementById("toastContainer");
       const toast = document.createElement("div");
       toast.className = `toast-message ${className}`;
       toast.textContent = message;
       container.appendChild(toast);
+
       setTimeout(() => {
-        toast.remove();
+        if (container.contains(toast)) container.removeChild(toast);
       }, 3000);
     }
-
-    // Monitor authentication state and check if the user is an admin
-    onAuthStateChanged(auth, (user) => {
-      checkAdmin(user);
-    });
   </script>
 </body>
 </html>
+
 
