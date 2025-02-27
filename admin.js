@@ -36,7 +36,6 @@ onAuthStateChanged(auth, async (user) => {
           if (document.getElementById("campaignForm")) {
             document.getElementById("campaignForm").style.display = "none";
           }
-          // Also, viewers won't see edit/delete buttons (handled in displayCampaigns)
         }
       } else {
         alert("User data not found. Contact support.");
@@ -61,7 +60,7 @@ function logout() {
       alert("Failed to log out. Please try again.");
     });
 }
-window.logout = logout; // Expose logout globally
+window.logout = logout; // Expose logout globally so HTML can call it
 
 // --- Firestore Setup ---
 import {
@@ -191,6 +190,7 @@ if (document.getElementById("campaignForm")) {
 
 /* -----------------------------------
    SAVE CAMPAIGN - Add document to Firestore
+   With error handling & toast feedback
 ----------------------------------- */
 async function saveCampaignToFirestore(year, campaignData) {
   try {
@@ -227,6 +227,9 @@ function displayCampaigns() {
 
   campaigns.forEach((campaign, index) => {
     const row = document.createElement("tr");
+    const actionsHTML = (currentUserRole === "admin") ?
+      `<button onclick="editCampaign(${index})">✏️ Edit</button>
+       <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>` : "";
     row.innerHTML = `
       <td>${campaign.brand || ""}</td>
       <td>${campaign.saleMonth || ""}</td>
@@ -243,24 +246,17 @@ function displayCampaigns() {
              <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>`
           : "No image"}
       </td>
-    `;
-    // Only show edit and delete buttons if user is an admin.
-    if (currentUserRole === "admin") {
-      row.innerHTML += `
       <td>
-        <button onclick="editCampaign(${index})">✏️ Edit</button>
-        <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>
+        ${actionsHTML}
       </td>
-      `;
-    } else {
-      row.innerHTML += `<td></td>`;
-    }
+    `;
     campaignTableBody.appendChild(row);
   });
 }
 
 /* -----------------------------------
    DELETE CAMPAIGN - Remove document from Firestore
+   With error handling & toast feedback
 ----------------------------------- */
 async function deleteCampaign(index) {
   const campaignToDelete = campaigns[index];
@@ -310,9 +306,7 @@ function editCampaign(index) {
       <input type="file" id="editImage${index}" class="editImageInput" accept="image/*" style="display: none;" onchange="updateEditImagePreview(${index}, this)">
       <button type="button" onclick="triggerEditImage(this)">Change Image</button>
       <br>
-      ${campaign.imageUrl 
-        ? `<a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>` 
-        : ""}
+      ${campaign.imageUrl ? `<a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>` : ""}
     </td>
     <td>
       <button onclick="saveEditedCampaign(${index})">💾 Save</button>
@@ -338,7 +332,7 @@ function triggerEditImage(button) {
 }
 
 /* -----------------------------------
-   UPDATE PREVIEW IMAGE on file selection
+   UPDATE PREVIEW IMAGE on file selection in edit mode
 ----------------------------------- */
 function updateEditImagePreview(index, inputElement) {
   const file = inputElement.files[0];
@@ -357,6 +351,7 @@ function updateEditImagePreview(index, inputElement) {
 
 /* -----------------------------------
    SAVE EDITED CAMPAIGN - Update Firestore doc
+   With error handling, loading spinner, and toast feedback
 ----------------------------------- */
 async function saveEditedCampaign(index) {
   const updated = { ...campaigns[index] };
@@ -405,7 +400,7 @@ async function saveEditedCampaign(index) {
 }
 
 /* -----------------------------------
-   updateCampaignInFirestore: Update Firestore doc
+   updateCampaignInFirestore: updates the existing doc in Firestore
 ----------------------------------- */
 async function updateCampaignInFirestore(year, updated) {
   if (!updated.id) {
@@ -464,7 +459,6 @@ function createToast(message, className) {
   toast.className = `toast-message ${className}`;
   toast.textContent = message;
   container.appendChild(toast);
-  // Remove after 3s
   setTimeout(() => {
     if (container.contains(toast)) container.removeChild(toast);
   }, 3000);
