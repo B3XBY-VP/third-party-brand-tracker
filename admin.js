@@ -32,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById("campaignForm").style.display = "block";
           }
         } else {
-          // For viewers, hide the campaign form so they can only view
+          // If the user is a viewer, hide the campaign form
           if (document.getElementById("campaignForm")) {
             document.getElementById("campaignForm").style.display = "none";
           }
@@ -76,8 +76,8 @@ import {
 let campaigns = [];
 
 // Global objects for undo/redo histories (keyed by edit index)
-let editHistories = {};
-let redoHistories = {};
+let editHistories = {}; // e.g. { 0: [initialState, ...] }
+let redoHistories = {}; // e.g. { 0: [undoneState, ...] }
 
 /* -----------------------------------
    SHOW YEAR - Called by the year buttons
@@ -199,7 +199,7 @@ async function saveCampaignToFirestore(year, campaignData) {
 }
 
 /* -----------------------------------
-   DATE FORMATTER
+   DATE FORMATTER - Converts "YYYY-MM-DD" to "DD/MM/YYYY"
 ----------------------------------- */
 function formatDateToDMY(isoString) {
   if (!isoString) return "";
@@ -209,7 +209,7 @@ function formatDateToDMY(isoString) {
 
 /* -----------------------------------
    DISPLAY CAMPAIGNS - Render campaigns in the table
-   For viewers, hide edit/delete buttons.
+   For viewers, do not show edit/delete buttons.
 ----------------------------------- */
 function displayCampaigns() {
   const campaignTableBody = document.querySelector("#campaignTable tbody");
@@ -273,8 +273,7 @@ async function deleteCampaign(index) {
 }
 
 /* -----------------------------------
-   EDIT CAMPAIGN - Inline editing (admin only)
-   This now includes Undo and Redo buttons.
+   EDIT CAMPAIGN - Inline editing (admin only) with Undo/Redo
 ----------------------------------- */
 function editCampaign(index) {
   if (currentUserRole !== "admin") {
@@ -285,9 +284,9 @@ function editCampaign(index) {
   const campaignTableBody = document.querySelector("#campaignTable tbody");
   const row = campaignTableBody.rows[index];
 
-  // Initialize undo/redo history for this edit session
-  editHistories[index] = [Object.assign({}, campaign)]; // Store initial state
-  redoHistories[index] = [];
+  // Initialize undo/redo history for this row if not already done
+  editHistories[index] = editHistories[index] || [ { ...campaign } ];
+  redoHistories[index] = redoHistories[index] || [];
 
   row.innerHTML = `
     <td><input type="text" id="editBrand${index}" value="${campaign.brand || ""}"></td>
@@ -316,7 +315,7 @@ function editCampaign(index) {
 }
 
 /* -----------------------------------
-   CANCEL EDIT - Restore display
+   CANCEL EDIT - Restore original display
 ----------------------------------- */
 function cancelEdit() {
   displayCampaigns();
@@ -357,15 +356,12 @@ function undoEdit(index) {
     showErrorToast("Nothing to undo.");
     return;
   }
-  // Pop the current state and push it into redo history
   const currentState = editHistories[index].pop();
   if (!redoHistories[index]) {
     redoHistories[index] = [];
   }
   redoHistories[index].push(currentState);
-  // Get the previous state from the undo history
   const previousState = editHistories[index][editHistories[index].length - 1];
-  // Update input fields
   document.getElementById(`editBrand${index}`).value = previousState.brand;
   document.getElementById(`editSaleMonth${index}`).value = previousState.saleMonth;
   document.getElementById(`editCampaignName${index}`).value = previousState.campaignName;
@@ -374,7 +370,6 @@ function undoEdit(index) {
   document.getElementById(`editStartDate${index}`).value = previousState.startDate;
   document.getElementById(`editEndDate${index}`).value = previousState.endDate;
   document.getElementById(`editEngagementNotes${index}`).value = previousState.engagementNotes;
-  // Update image preview if applicable
   const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
   if (preview) preview.src = previousState.imageUrl || "";
   showSuccessToast("Undo successful.");
@@ -386,7 +381,6 @@ function redoEdit(index) {
     return;
   }
   const nextState = redoHistories[index].pop();
-  // Get current state from inputs and push it to undo history
   const currentState = {
     brand: document.getElementById(`editBrand${index}`).value,
     saleMonth: document.getElementById(`editSaleMonth${index}`).value,
@@ -402,7 +396,6 @@ function redoEdit(index) {
     editHistories[index] = [];
   }
   editHistories[index].push(currentState);
-  // Apply nextState to inputs
   document.getElementById(`editBrand${index}`).value = nextState.brand;
   document.getElementById(`editSaleMonth${index}`).value = nextState.saleMonth;
   document.getElementById(`editCampaignName${index}`).value = nextState.campaignName;
@@ -465,7 +458,7 @@ async function saveEditedCampaign(index) {
 }
 
 /* -----------------------------------
-   updateCampaignInFirestore: updates the Firestore doc
+   updateCampaignInFirestore: updates the existing doc in Firestore
 ----------------------------------- */
 async function updateCampaignInFirestore(year, updated) {
   if (!updated.id) {
@@ -542,66 +535,4 @@ window.cancelEdit = cancelEdit;
 window.undoEdit = undoEdit;
 window.redoEdit = redoEdit;
 
-/* -----------------------------------
-   UNDO & REDO FUNCTIONS
------------------------------------ */
-let editHistories = {}; // key: edit index, value: array of previous states
-let redoHistories = {}; // key: edit index, value: array of undone states
-
-function undoEdit(index) {
-  if (!editHistories[index] || editHistories[index].length < 2) {
-    showErrorToast("Nothing to undo.");
-    return;
-  }
-  const currentState = editHistories[index].pop();
-  if (!redoHistories[index]) {
-    redoHistories[index] = [];
-  }
-  redoHistories[index].push(currentState);
-  const previousState = editHistories[index][editHistories[index].length - 1];
-  document.getElementById(`editBrand${index}`).value = previousState.brand;
-  document.getElementById(`editSaleMonth${index}`).value = previousState.saleMonth;
-  document.getElementById(`editCampaignName${index}`).value = previousState.campaignName;
-  document.getElementById(`editCampaignType${index}`).value = previousState.campaignType;
-  document.getElementById(`editPageLocation${index}`).value = previousState.pageLocation;
-  document.getElementById(`editStartDate${index}`).value = previousState.startDate;
-  document.getElementById(`editEndDate${index}`).value = previousState.endDate;
-  document.getElementById(`editEngagementNotes${index}`).value = previousState.engagementNotes;
-  const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
-  if (preview) preview.src = previousState.imageUrl || "";
-  showSuccessToast("Undo successful.");
-}
-
-function redoEdit(index) {
-  if (!redoHistories[index] || redoHistories[index].length === 0) {
-    showErrorToast("Nothing to redo.");
-    return;
-  }
-  const nextState = redoHistories[index].pop();
-  const currentState = {
-    brand: document.getElementById(`editBrand${index}`).value,
-    saleMonth: document.getElementById(`editSaleMonth${index}`).value,
-    campaignName: document.getElementById(`editCampaignName${index}`).value,
-    campaignType: document.getElementById(`editCampaignType${index}`).value,
-    pageLocation: document.getElementById(`editPageLocation${index}`).value,
-    startDate: document.getElementById(`editStartDate${index}`).value,
-    endDate: document.getElementById(`editEndDate${index}`).value,
-    engagementNotes: document.getElementById(`editEngagementNotes${index}`).value,
-    imageUrl: document.querySelector(`#editImage${index} ~ .editImagePreview`)?.src || ""
-  };
-  if (!editHistories[index]) {
-    editHistories[index] = [];
-  }
-  editHistories[index].push(currentState);
-  document.getElementById(`editBrand${index}`).value = nextState.brand;
-  document.getElementById(`editSaleMonth${index}`).value = nextState.saleMonth;
-  document.getElementById(`editCampaignName${index}`).value = nextState.campaignName;
-  document.getElementById(`editCampaignType${index}`).value = nextState.campaignType;
-  document.getElementById(`editPageLocation${index}`).value = nextState.pageLocation;
-  document.getElementById(`editStartDate${index}`).value = nextState.startDate;
-  document.getElementById(`editEndDate${index}`).value = nextState.endDate;
-  document.getElementById(`editEngagementNotes${index}`).value = nextState.engagementNotes;
-  const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
-  if (preview) preview.src = nextState.imageUrl || "";
-  showSuccessToast("Redo successful.");
 }
