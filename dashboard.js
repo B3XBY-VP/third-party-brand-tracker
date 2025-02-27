@@ -1,3 +1,4 @@
+
 /****************************************************
  * dashboard.js - Firestore Version with PDF Export,
  * Modal Gallery, Date Formatting, Filtering, Sorting,
@@ -8,6 +9,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   updateDoc,
   orderBy,
@@ -87,6 +89,7 @@ function watchDashboardCampaigns(year) {
   2. displayDashboardCampaigns
   Renders the campaigns array into #dashboardTable,
   applying search + pagination + brand/month filters.
+  (Now includes a Version History button for each row.)
 */
 function displayDashboardCampaigns() {
   const dashboardTableBody = document.querySelector("#dashboardTable tbody");
@@ -112,13 +115,13 @@ function displayDashboardCampaigns() {
 
   // If pageItems is empty after filters, show a placeholder row
   if (pageItems.length === 0) {
-    dashboardTableBody.innerHTML = `<tr><td colspan='9'>No campaigns match your criteria.</td></tr>`;
+    dashboardTableBody.innerHTML = `<tr><td colspan='10'>No campaigns match your criteria.</td></tr>`;
     document.getElementById("summaryContent").textContent = "No campaigns for this query.";
     updatePaginationInfo(totalItems, totalPages);
     return;
   }
 
-  // Render the pageItems
+  // Render the pageItems with an extra column for Version History
   pageItems.forEach((campaign, index) => {
     const row = dashboardTableBody.insertRow();
     // For drag-and-drop, use the doc ID or fallback index
@@ -151,6 +154,9 @@ function displayDashboardCampaigns() {
             : "No Image"
         }
       </td>
+      <td>
+        <button onclick="openVersionHistory('${campaign.id}')">View History</button>
+      </td>
     `;
   });
 
@@ -178,7 +184,58 @@ function openImage(url) {
 }
 
 /* 
-  4. Set up brand/month filters, modal close, column sorting
+  4. openVersionHistory(campaignId):
+  Fetches and displays the edit history for the given campaign.
+  Both admins and viewers can see the history. If the user is an admin,
+  a Restore button will be shown for each version entry.
+*/
+async function openVersionHistory(campaignId) {
+  try {
+    const docRef = doc(db, `campaigns_${currentYear}`, campaignId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const history = docSnap.data().editHistory || [];
+      // Sort history by timestamp (newest first)
+      history.sort((a, b) => {
+        if (!a.timestamp || !b.timestamp) return 0;
+        return b.timestamp.seconds - a.timestamp.seconds;
+      });
+      
+      let html = "";
+      if (history.length === 0) {
+        html = "No edit history available.";
+      } else {
+        history.forEach(entry => {
+          const date = entry.timestamp ? new Date(entry.timestamp.seconds * 1000).toLocaleString() : "Unknown date";
+          let changesHtml = "";
+          if (entry.changes) {
+            for (const key in entry.changes) {
+              changesHtml += `<p><strong>${key}:</strong> ${entry.changes[key]}</p>`;
+            }
+          }
+          html += `<div class="history-entry">
+                    <p><strong>Editor:</strong> ${entry.editor || "Unknown"}</p>
+                    <p><strong>Date:</strong> ${date}</p>
+                    ${changesHtml}
+                    ${window.currentUserRole === "admin" ? `<button onclick="restoreVersion('${campaignId}', ${entry.timestamp.seconds})">Restore</button>` : ""}
+                   </div><hr/>`;
+        });
+      }
+      // Assume there's a modal with id "historyModal" and a container with id "historyContent"
+      document.getElementById("historyContent").innerHTML = html;
+      document.getElementById("historyModal").style.display = "block";
+    } else {
+      showErrorToast("Campaign not found.");
+    }
+  } catch (error) {
+    console.error("Error loading version history:", error);
+    showErrorToast("Failed to load version history. Please try again.");
+  }
+}
+window.openVersionHistory = openVersionHistory;
+
+/* 
+  5. Set up brand/month filters, modal close, column sorting
 */
 document.addEventListener("DOMContentLoaded", () => {
   // brand + month filters + sorting are already set below
@@ -202,17 +259,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // modal close
-  const modalClose = document.querySelector(".modal .close");
-  if (modalClose) {
-    modalClose.addEventListener("click", () => {
-      document.getElementById("imageModal").style.display = "none";
+  // Modal close for image and version history modals
+  const modalCloseButtons = document.querySelectorAll(".modal .close");
+  modalCloseButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      btn.parentElement.parentElement.style.display = "none";
     });
-  }
+  });
   window.addEventListener("click", (event) => {
-    const modal = document.getElementById("imageModal");
-    if (event.target === modal) {
-      modal.style.display = "none";
+    const imageModal = document.getElementById("imageModal");
+    const historyModal = document.getElementById("historyModal");
+    if (event.target === imageModal) {
+      imageModal.style.display = "none";
+    }
+    if (event.target === historyModal) {
+      historyModal.style.display = "none";
     }
   });
 
@@ -227,7 +288,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* 
-  5. setSearchKeyword(keyword):
+  6. setSearchKeyword(keyword):
   Stores the user's search text, resets to page 1, re-displays.
 */
 function setSearchKeyword(keyword) {
@@ -237,7 +298,7 @@ function setSearchKeyword(keyword) {
 }
 
 /* 
-  6. Pagination: prevPage(), nextPage(), updatePaginationInfo
+  7. Pagination: prevPage(), nextPage(), updatePaginationInfo
 */
 function nextPage() {
   currentPage++;
@@ -257,7 +318,7 @@ function updatePaginationInfo(totalItems, totalPages) {
 }
 
 /* 
-  7. filterCampaigns():
+  8. filterCampaigns():
   Brand + Month filters on the already rendered table rows
 */
 function filterCampaigns() {
@@ -278,7 +339,7 @@ function filterCampaigns() {
 }
 
 /* 
-  8. Column Sorting
+  9. Column Sorting
 */
 const sortDirections = {};
 function sortTableByColumn(columnIndex) {
@@ -303,14 +364,14 @@ function sortTableByColumn(columnIndex) {
 }
 
 /* 
-  9. Default year on window load
+  10. Default year on window load
 */
 window.onload = function() {
   showYear("2025");
 };
 
 /* 
-  10. QUARTER COUNTING + SUMMARY RENDERING
+  11. QUARTER COUNTING + SUMMARY RENDERING
 */
 function getQuarterFromMonth(monthName) {
   const m = (monthName || "").toLowerCase();
@@ -377,7 +438,7 @@ function displaySummary(appearances, year) {
 }
 
 /* 
-  11. Drag-and-Drop Reordering 
+  12. Drag-and-Drop Reordering 
 */
 async function updateDashboardOrder(newOrder) {
   console.log("New order of entries:", newOrder);
@@ -392,7 +453,7 @@ async function updateDashboardOrder(newOrder) {
 }
 
 /* 
-   12. Spinner & Toast Helpers
+   13. Spinner & Toast Helpers
 */
 function showLoadingModal() {
   const modal = document.getElementById("loadingModal");
@@ -426,11 +487,11 @@ function createToast(message, className) {
 }
 
 /* 
-   13. Expose Functions for Inline Handlers
+   14. Expose Functions for Inline Handlers
 */
 window.showYear = showYear;
 window.openImage = openImage;
 window.updateDashboardOrder = updateDashboardOrder;
 window.setSearchKeyword = setSearchKeyword;  // For the search bar
 window.prevPage = prevPage;                 // For pagination
-window.nextPage = nextPage;                 // For pagination
+window.nextPage = nextPage;

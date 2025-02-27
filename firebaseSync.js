@@ -3,7 +3,14 @@
 // 1. Import Firebase modules from the CDN
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+import {
+  getFirestore,
+  serverTimestamp,
+  arrayUnion,
+  doc,
+  getDoc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
 
 // 2. Initialize Firebase with your project configuration
@@ -28,6 +35,68 @@ const auth = getAuth(app);
 window.db = db;
 window.auth = auth;
 
-// 5. Additional Firestore-specific logic (e.g., listeners, writes) can be added here.
+/**
+ * Logs version history to Firestore by appending a new entry to `editHistory`.
+ * @param {string} campaignId - The Firestore document ID of the campaign.
+ * @param {string} editor - Name or ID of the user who edited the campaign.
+ * @param {object} changes - An object of changed fields, mapping `fieldName` to `"oldValue → newValue"`.
+ */
+async function saveVersionHistory(campaignId, editor, changes) {
+  try {
+    const campaignRef = doc(db, "campaigns", campaignId);
 
-export { db, auth };
+    // Append a new edit record to the `editHistory` array
+    await updateDoc(campaignRef, {
+      editHistory: arrayUnion({
+        editor: editor,
+        timestamp: serverTimestamp(),  // Firestore server time
+        changes: changes
+      })
+    });
+
+    console.log("Version history saved!");
+  } catch (error) {
+    console.error("Error saving version history: ", error);
+  }
+}
+
+/**
+ * Updates a campaign document in Firestore and logs changes to version history.
+ * @param {string} campaignId - The Firestore document ID of the campaign.
+ * @param {object} newData - Key-value pairs of updated fields (e.g., { title: "New Title" }).
+ * @param {string} editor - Name or ID of the user making the update.
+ */
+async function updateCampaign(campaignId, newData, editor) {
+  try {
+    const campaignRef = doc(db, "campaigns", campaignId);
+    const campaignSnap = await getDoc(campaignRef);
+
+    if (campaignSnap.exists()) {
+      const oldData = campaignSnap.data();
+      let changes = {};
+
+      // Compare old vs. new data to see what changed
+      Object.keys(newData).forEach((key) => {
+        if (oldData[key] !== newData[key]) {
+          changes[key] = `${oldData[key]} → ${newData[key]}`;
+        }
+      });
+
+      // If there are changes, log them to version history
+      if (Object.keys(changes).length > 0) {
+        await saveVersionHistory(campaignId, editor, changes);
+      }
+
+      // Update the campaign document with new data
+      await updateDoc(campaignRef, newData);
+      console.log("Campaign updated successfully!");
+    } else {
+      console.log("No such campaign document found!");
+    }
+  } catch (error) {
+    console.error("Error updating campaign: ", error);
+  }
+}
+
+// 5. Export everything you need elsewhere
+export { db, auth, saveVersionHistory, updateCampaign };

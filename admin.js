@@ -1,16 +1,32 @@
 /****************************************************
  * admin.js - Firestore Version (Real-Time Sync)
  * With Error Handling, Form Validation, Loading Spinner,
- * Toast Messages, Logout, and Role-Based UI
+ * Toast Messages, Logout, and Role-Based UI, including
+ * version history logging & rollback (restoreVersion)
  ****************************************************/
 
 // --- Authentication Check & Role Retrieval ---
 import { auth, db } from "./firebaseSync.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+import { 
+  onAuthStateChanged, 
+  signOut 
+} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+import { 
+  doc, 
+  getDoc, 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot,
+  serverTimestamp,
+  arrayUnion
+} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 
-// Global variable to hold the current user's role (default to viewer)
+// Global variables to hold the current user's role and current year
 let currentUserRole = "viewer";
+let currentYear = ""; 
+let currentUserEmail = "";
 
 // Check authentication and load user role from Firestore
 onAuthStateChanged(auth, async (user) => {
@@ -18,6 +34,7 @@ onAuthStateChanged(auth, async (user) => {
     window.location.href = "login.html";
   } else {
     console.log("Logged in as:", user.email);
+    currentUserEmail = user.email;
     try {
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
@@ -63,22 +80,18 @@ function logout() {
 window.logout = logout; // Expose logout globally so HTML can call it
 
 // --- Firestore Setup ---
-import {
-  collection,
-  doc as docFS, // alias to avoid naming conflicts
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+/* Note: We alias doc as docFS to avoid naming conflicts. */
+import { doc as docFS } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 
 // In-memory array for campaigns
 let campaigns = [];
 
 /* -----------------------------------
-   SHOW YEAR - Called by the year buttons
+   SHOW YEAR - Called by the year buttons.
+   Also stores currentYear for use in updates/restores.
 ----------------------------------- */
 function showYear(year) {
+  currentYear = year; // store the current year globally
   document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
   watchCampaigns(year);
 }
@@ -158,7 +171,8 @@ if (document.getElementById("campaignForm")) {
             endDate,
             engagementNotes,
             imageUrl,
-            dateUploaded: new Date().toISOString()
+            dateUploaded: new Date().toISOString(),
+            editHistory: [] // initialize version history
           });
           document.getElementById("campaignForm").reset();
           hideSavingModal();
@@ -175,7 +189,8 @@ if (document.getElementById("campaignForm")) {
           endDate,
           engagementNotes,
           imageUrl: "",
-          dateUploaded: new Date().toISOString()
+          dateUploaded: new Date().toISOString(),
+          editHistory: [] // initialize version history
         });
         document.getElementById("campaignForm").reset();
         hideSavingModal();
@@ -213,7 +228,7 @@ function formatDateToDMY(isoString) {
 }
 
 /* -----------------------------------
-   DISPLAY CAMPAIGNS - Render campaigns in the table
+   DISPLAY CAMPAIGNS - Render campaigns in the table.
    For viewers, do not show edit/delete buttons.
 ----------------------------------- */
 function displayCampaigns() {
@@ -229,7 +244,8 @@ function displayCampaigns() {
     const row = document.createElement("tr");
     const actionsHTML = (currentUserRole === "admin") ?
       `<button onclick="editCampaign(${index})">✏️ Edit</button>
-       <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>` : "";
+       <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>
+       <button onclick="openVersionHistory('${campaign.id}')">Version History</button>` : "";
     row.innerHTML = `
       <td>${campaign.brand || ""}</td>
       <td>${campaign.saleMonth || ""}</td>
@@ -350,8 +366,10 @@ function updateEditImagePreview(index, inputElement) {
 }
 
 /* -----------------------------------
-   SAVE EDITED CAMPAIGN - Update Firestore doc
-   With error handling, loading spinner, and toast feedback
+   SAVE EDITED CAMPAIGN - Update Firestore document
+   Now includes version history logging:
+   - Compares new values against stored values.
+   - Uses arrayUnion to append a new edit record to editHistory.
 ----------------------------------- */
 async function saveEditedCampaign(index) {
   const updated = { ...campaigns[index] };
@@ -400,7 +418,8 @@ async function saveEditedCampaign(index) {
 }
 
 /* -----------------------------------
-   updateCampaignInFirestore: updates the existing doc in Firestore
+   updateCampaignInFirestore:
+   Updates the existing document in Firestore while logging version history.
 ----------------------------------- */
 async function updateCampaignInFirestore(year, updated) {
   if (!updated.id) {
@@ -409,9 +428,33 @@ async function updateCampaignInFirestore(year, updated) {
   }
   try {
     const docRef = docFS(db, `campaigns_${year}`, updated.id);
-    const { id, ...dataToSave } = updated;
-    await updateDoc(docRef, dataToSave);
-    showSuccessToast("Campaign updated successfully!");
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const oldData = docSnap.data();
+      let changes = {};
+      Object.keys(updated).forEach(key => {
+        if (key === 'id') return;
+        if (oldData[key] !== updated[key]) {
+          changes[key] = `${oldData[key]} → ${updated[key]}`;
+        }
+      });
+      // If there are changes, log them in version history
+      if (Object.keys(changes).length > 0) {
+        await updateDoc(docRef, {
+          editHistory: arrayUnion({
+            editor: currentUserEmail,
+            timestamp: serverTimestamp(),
+            changes: changes
+          })
+        });
+      }
+      // Now update the document with new data (exclude the id field)
+      const { id, ...dataToSave } = updated;
+      await updateDoc(docRef, dataToSave);
+      showSuccessToast("Campaign updated successfully!");
+    } else {
+      console.error("Document not found.");
+    }
   } catch (error) {
     console.error("Error updating campaign:", error);
     showErrorToast("Failed to update campaign. Please try again.");
@@ -419,11 +462,48 @@ async function updateCampaignInFirestore(year, updated) {
 }
 
 /* -----------------------------------
+   RESTORE VERSION - Roll back to a previous version
+   Only available to admins. Finds a version by timestamp and reverts changes.
+----------------------------------- */
+async function restoreVersion(campaignId, timestampValue) {
+  if (currentUserRole !== "admin") {
+    showErrorToast("You do not have permission to restore versions.");
+    return;
+  }
+  try {
+    const docRef = docFS(db, `campaigns_${currentYear}`, campaignId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const history = docSnap.data().editHistory || [];
+      // Find the version by comparing timestamp.seconds with the provided timestampValue (as integer)
+      const previousVersion = history.find(entry => entry.timestamp && entry.timestamp.seconds === parseInt(timestampValue));
+      if (!previousVersion) {
+        showErrorToast("Version not found.");
+        return;
+      }
+      let restoredData = {};
+      Object.keys(previousVersion.changes).forEach(key => {
+        // Roll back to the old value (before the " → ")
+        const oldValue = previousVersion.changes[key].split(" → ")[0];
+        restoredData[key] = oldValue;
+      });
+      await updateDoc(docRef, restoredData);
+      showSuccessToast("Campaign restored to previous version.");
+    }
+  } catch (error) {
+    console.error("Error restoring version:", error);
+    showErrorToast("Failed to restore version. Please try again.");
+  }
+}
+window.restoreVersion = restoreVersion; // Expose restoreVersion globally
+
+/* -----------------------------------
    OPEN IMAGE IN NEW TAB
 ----------------------------------- */
 function openImage(url) {
   window.open(url, "_blank");
 }
+window.openImage = openImage;
 
 /* -----------------------------------
    DEFAULT YEAR ON LOAD
@@ -467,10 +547,15 @@ function createToast(message, className) {
 /* ====================================
    EXPOSE FUNCTIONS FOR INLINE EVENT HANDLERS
 ==================================== */
-window.openImage = openImage;
 window.editCampaign = editCampaign;
 window.deleteCampaign = deleteCampaign;
 window.triggerEditImage = triggerEditImage;
 window.updateEditImagePreview = updateEditImagePreview;
 window.saveEditedCampaign = saveEditedCampaign;
 window.cancelEdit = cancelEdit;
+window.openVersionHistory = function(campaignId) {
+  // For example, open a modal or new view displaying version history for the campaign.
+  // This function can call restoreVersion when an admin chooses a past version.
+  // Implementation details depend on your UI.
+  alert("Version history functionality is available via the 'Restore' buttons in the version history view.");
+};
