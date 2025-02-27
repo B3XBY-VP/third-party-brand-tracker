@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - User Roles</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f4;
+    }
+    h1, p {
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background-color: #fff;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #32AA3C;
+      color: white;
+    }
+    .btn {
+      padding: 6px 10px;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background-color: #45a049;
+    }
+    .loading {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 9999;
+    }
+    .toast-message {
+      padding: 10px;
+      border-radius: 5px;
+      color: #fff;
+      background-color: #333;
+      animation: fadeOut 3s forwards;
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    .toast-success {
+      background-color: #4caf50;
+    }
+    .toast-error {
+      background-color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <h1>Admin Panel: Manage User Roles</h1>
+  <p>Only admins can update user roles.</p>
+
+  <table id="usersTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Current Role</th>
+        <th>New Role</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="loadingIndicator" class="loading" style="display: none;">Loading users...</div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { auth, db } from "./firebaseSync.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+    import { collection, doc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+
+    const usersTableBody = document.querySelector("#usersTable tbody");
+
+    // Check if the logged-in user is an admin
+    async function checkAdmin(user) {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        if (userData.role !== "admin") {
+          alert("Access denied. You do not have admin privileges.");
+          window.location.href = "index.html";
+        } else {
+          fetchUsers();
+        }
+      } else {
+        alert("User data not found. Contact support.");
+        window.location.href = "login.html";
+      }
+    }
+
+    // Fetch users in real time
+    function fetchUsers() {
+      usersTableBody.innerHTML = "";
+      const loadingIndicator = document.getElementById("loadingIndicator");
+      loadingIndicator.style.display = "block";
+
+      const colRef = collection(db, "users");
+      
+      onSnapshot(colRef, (snapshot) => {
+        usersTableBody.innerHTML = "";
+        snapshot.forEach((docSnap) => {
+          const userData = docSnap.data();
+          const tr = document.createElement("tr");
+          
+          tr.innerHTML = `
+            <td>${userData.displayName || "N/A"}</td>
+            <td>${userData.email || "N/A"}</td>
+            <td>${userData.role || "N/A"}</td>
+            <td>
+              <select class="newRoleSelect" data-userid="${docSnap.id}">
+                <option value="admin" ${userData.role === "admin" ? "selected" : ""}>Admin</option>
+                <option value="editor" ${userData.role === "editor" ? "selected" : ""}>Editor</option>
+                <option value="viewer" ${userData.role === "viewer" ? "selected" : ""}>Viewer</option>
+              </select>
+            </td>
+            <td><button class="btn updateRoleBtn" data-userid="${docSnap.id}">Update</button></td>
+          `;
+
+          usersTableBody.appendChild(tr);
+        });
+
+        // Add event listeners after rows are created
+        document.querySelectorAll(".updateRoleBtn").forEach(button => {
+          button.addEventListener("click", async (event) => {
+            const userId = event.target.dataset.userid;
+            const newRole = document.querySelector(`.newRoleSelect[data-userid='${userId}']`).value;
+            await updateUserRole(userId, newRole);
+          });
+        });
+
+        loadingIndicator.style.display = "none";
+      }, (error) => {
+        console.error("Error loading users:", error);
+        showToast("Error loading users. Please try again.", "toast-error");
+      });
+    }
+
+    // Update user role in Firestore
+    async function updateUserRole(userId, newRole) {
+      try {
+        const userDocRef = doc(db, "users", userId);
+        await updateDoc(userDocRef, { role: newRole });
+        showToast("User role updated successfully!", "toast-success");
+      } catch (error) {
+        console.error("Error updating user role:", error);
+        showToast("Failed to update user role. Please try again.", "toast-error");
+      }
+    }
+
+    // Toast helper function for notifications
+    function showToast(message, className) {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = `toast-message ${className}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
+    }
+
+    // Monitor authentication state and check if the user is an admin
+    onAuthStateChanged(auth, (user) => {
+      checkAdmin(user);
+    });
+  </script>
+</body>
+</html>
+

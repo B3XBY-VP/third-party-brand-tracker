@@ -1,103 +1,171 @@
 /****************************************************
  * admin.js - Firestore Version (Real-Time Sync)
  * With Error Handling, Form Validation, Loading Spinner,
- * and Toast Messages
+ * Toast Messages, Logout, and Role-Based UI
  ****************************************************/
 
+// --- Authentication Check & Role Retrieval ---
+import { auth, db } from "./firebaseSync.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+
+// Global variable to hold the current user's role (default to viewer)
+let currentUserRole = "viewer";
+
+// Check authentication and load user role from Firestore
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = "login.html";
+  } else {
+    console.log("Logged in as:", user.email);
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        currentUserRole = userData.role || "viewer"; // default to viewer if not set
+        // If the user is an admin, show the Manage User Roles button and campaign form
+        if (currentUserRole === "admin") {
+          const manageButton = document.getElementById("manageUsersButton");
+          if (manageButton) manageButton.style.display = "inline-block";
+          if (document.getElementById("campaignForm")) {
+            document.getElementById("campaignForm").style.display = "block";
+          }
+        } else {
+          // If the user is a viewer, hide the campaign form
+          if (document.getElementById("campaignForm")) {
+            document.getElementById("campaignForm").style.display = "none";
+          }
+          // Also, viewers won't see edit/delete buttons (handled in displayCampaigns)
+        }
+      } else {
+        alert("User data not found. Contact support.");
+        window.location.href = "login.html";
+      }
+    } catch (error) {
+      console.error("Error checking user role:", error);
+      alert("Error verifying user role.");
+      window.location.href = "login.html";
+    }
+  }
+});
+
+// --- Logout Function ---
+function logout() {
+  signOut(auth)
+    .then(() => {
+      window.location.href = "login.html";
+    })
+    .catch((error) => {
+      console.error("Logout error:", error);
+      alert("Failed to log out. Please try again.");
+    });
+}
+window.logout = logout; // Expose logout globally
+
+// --- Firestore Setup ---
 import {
   collection,
-  doc,
+  doc as docFS, // alias to avoid naming conflicts
   addDoc,
   updateDoc,
   deleteDoc,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
-import { db } from "./firebaseSync.js";
 
-// In-memory array of campaigns for inline editing
+// In-memory array for campaigns
 let campaigns = [];
 
 /* -----------------------------------
-   1. LOGIN CHECK - Redirect if not logged in
------------------------------------ */
-document.addEventListener("DOMContentLoaded", function () {
-  const correctPassword = "marketing123";
-  const userPassword = sessionStorage.getItem("adminAuth");
-
-  if (userPassword !== correctPassword) {
-    window.location.href = "login.html";
-  }
-});
-
-/* -----------------------------------
-   2. SHOW YEAR - Called by the year buttons
-   Sets up a real-time listener for that year's campaigns.
+   SHOW YEAR - Called by the year buttons
 ----------------------------------- */
 function showYear(year) {
   document.getElementById("yearTitle").textContent = `Campaigns for ${year}`;
-  watchCampaigns(year); // Real-time Firestore listener
+  watchCampaigns(year);
 }
+window.showYear = showYear;
 
 /* -----------------------------------
    watchCampaigns(year):
-   - Attaches onSnapshot to "campaigns_YEAR" for real-time updates.
-   - Whenever Firestore data changes, onSnapshot triggers displayCampaigns().
+   Attaches a real-time listener to "campaigns_YEAR"
 ----------------------------------- */
 function watchCampaigns(year) {
   const colRef = collection(db, `campaigns_${year}`);
-
-  // Clear existing data
   campaigns = [];
-
-  // onSnapshot sets up a persistent listener
   onSnapshot(colRef, (snapshot) => {
     campaigns = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
-      ...docSnap.data(),
+      ...docSnap.data()
     }));
     displayCampaigns();
+  }, (err) => {
+    console.error("onSnapshot error:", err);
+    showErrorToast("Firestore error: " + err.message);
   });
 }
 
 /* -----------------------------------
-   3. FORM SUBMISSION - Add a new campaign
-   With validation & loading spinner
+   FORM SUBMISSION - Add new campaign
+   With validation & loading spinner (admin only)
 ----------------------------------- */
-document.getElementById("campaignForm").addEventListener("submit", async function (event) {
-  event.preventDefault();
+if (document.getElementById("campaignForm")) {
+  document.getElementById("campaignForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
 
-  // Identify the current year from heading
-  const yearText = document.getElementById("yearTitle").textContent;
-  const selectedYear = yearText.split(" ")[2]; // e.g., "2024"
+    // Only allow submission if user is admin
+    if (currentUserRole !== "admin") {
+      showErrorToast("You do not have permission to add campaigns.");
+      return;
+    }
 
-  // Gather form fields
-  const brand = document.getElementById("brand").value;
-  const saleMonth = document.getElementById("saleMonth").value;
-  const campaignName = document.getElementById("campaignName").value;
-  const campaignType = document.getElementById("campaignType").value;
-  const pageLocation = document.getElementById("pageLocation").value;
-  const startDate = document.getElementById("startDate").value;
-  const endDate = document.getElementById("endDate").value;
-  const engagementNotes = document.getElementById("engagementNotes").value;
-  const imageFile = document.getElementById("campaignImage").files[0];
+    // Identify the selected year from the heading
+    const yearText = document.getElementById("yearTitle").textContent;
+    const selectedYear = yearText.split(" ")[2];
 
-  // Basic Form Validation
-  if (!brand || !campaignName || !startDate || !endDate) {
-    showErrorToast("Please fill out all required fields (brand, campaign name, start/end dates).");
-    return;
-  }
-  if (new Date(endDate) < new Date(startDate)) {
-    showErrorToast("End date cannot be earlier than start date.");
-    return;
-  }
+    // Gather form fields
+    const brand = document.getElementById("brand").value;
+    const saleMonth = document.getElementById("saleMonth").value;
+    const campaignName = document.getElementById("campaignName").value;
+    const campaignType = document.getElementById("campaignType").value;
+    const pageLocation = document.getElementById("pageLocation").value;
+    const startDate = document.getElementById("startDate").value;
+    const endDate = document.getElementById("endDate").value;
+    const engagementNotes = document.getElementById("engagementNotes").value;
+    const imageFile = document.getElementById("campaignImage").files[0];
 
-  // Show spinner while saving
-  showSavingModal();
-  try {
-    if (imageFile) {
-      const reader = new FileReader();
-      reader.onload = async function(e) {
-        const imageUrl = e.target.result;
+    // Basic validation
+    if (!brand || !campaignName || !startDate || !endDate) {
+      showErrorToast("Please fill out all required fields (brand, campaign name, start/end dates).");
+      return;
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+      showErrorToast("End date cannot be earlier than start date.");
+      return;
+    }
+
+    showSavingModal();
+    try {
+      if (imageFile) {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          const imageUrl = e.target.result;
+          await saveCampaignToFirestore(selectedYear, {
+            brand,
+            saleMonth,
+            campaignName,
+            campaignType,
+            pageLocation,
+            startDate,
+            endDate,
+            engagementNotes,
+            imageUrl,
+            dateUploaded: new Date().toISOString()
+          });
+          document.getElementById("campaignForm").reset();
+          hideSavingModal();
+        };
+        reader.readAsDataURL(imageFile);
+      } else {
         await saveCampaignToFirestore(selectedYear, {
           brand,
           saleMonth,
@@ -107,45 +175,28 @@ document.getElementById("campaignForm").addEventListener("submit", async functio
           startDate,
           endDate,
           engagementNotes,
-          imageUrl
+          imageUrl: "",
+          dateUploaded: new Date().toISOString()
         });
         document.getElementById("campaignForm").reset();
         hideSavingModal();
-      };
-      reader.readAsDataURL(imageFile);
-    } else {
-      // No image
-      await saveCampaignToFirestore(selectedYear, {
-        brand,
-        saleMonth,
-        campaignName,
-        campaignType,
-        pageLocation,
-        startDate,
-        endDate,
-        engagementNotes,
-        imageUrl: ""
-      });
-      document.getElementById("campaignForm").reset();
+      }
+    } catch (error) {
+      console.error("Error uploading campaign:", error);
+      showErrorToast("Failed to save campaign. Please try again.");
       hideSavingModal();
     }
-  } catch (error) {
-    console.error("Error uploading campaign:", error);
-    showErrorToast("Failed to save campaign. Please try again.");
-    hideSavingModal();
-  }
-});
+  });
+}
 
 /* -----------------------------------
-   4. SAVE CAMPAIGN - Add a new doc to Firestore
-   With error handling & toast feedback
+   SAVE CAMPAIGN - Add document to Firestore
 ----------------------------------- */
 async function saveCampaignToFirestore(year, campaignData) {
   try {
     const colRef = collection(db, `campaigns_${year}`);
     await addDoc(colRef, campaignData);
     showSuccessToast("Campaign saved successfully!");
-    // onSnapshot auto-refreshes displayCampaigns()
   } catch (error) {
     console.error("Error saving campaign:", error);
     showErrorToast("Failed to save campaign. Please try again.");
@@ -153,16 +204,17 @@ async function saveCampaignToFirestore(year, campaignData) {
 }
 
 /* -----------------------------------
-   5. DATE FORMATTER - Converts "YYYY-MM-DD" -> "DD/MM/YYYY"
+   DATE FORMATTER - Converts "YYYY-MM-DD" to "DD/MM/YYYY"
 ----------------------------------- */
 function formatDateToDMY(isoString) {
   if (!isoString) return "";
   const [year, month, day] = isoString.split("-");
-  return `${day}/${month}/${year}`; 
+  return `${day}/${month}/${year}`;
 }
 
 /* -----------------------------------
-   6. DISPLAY CAMPAIGNS - Populate the table
+   DISPLAY CAMPAIGNS - Render campaigns in the table
+   For viewers, do not show edit/delete buttons.
 ----------------------------------- */
 function displayCampaigns() {
   const campaignTableBody = document.querySelector("#campaignTable tbody");
@@ -173,7 +225,6 @@ function displayCampaigns() {
     return;
   }
 
-  // Build a row for each campaign
   campaigns.forEach((campaign, index) => {
     const row = document.createElement("tr");
     row.innerHTML = `
@@ -186,28 +237,30 @@ function displayCampaigns() {
       <td>${formatDateToDMY(campaign.endDate)}</td>
       <td>${campaign.engagementNotes || ""}</td>
       <td>
-        ${
-          campaign.imageUrl
-            ? `<img src="${campaign.imageUrl}" width="50" alt="Campaign Image"
-                  onclick="openImage('${campaign.imageUrl}')">
-               <br>
-               <a href="${campaign.imageUrl}" download="campaign-image.png"
-                  class="download-btn">Download</a>`
-            : "No image"
-        }
+        ${campaign.imageUrl
+          ? `<img src="${campaign.imageUrl}" width="50" alt="Campaign Image" onclick="openImage('${campaign.imageUrl}')">
+             <br>
+             <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>`
+          : "No image"}
       </td>
+    `;
+    // Only show edit and delete buttons if user is an admin.
+    if (currentUserRole === "admin") {
+      row.innerHTML += `
       <td>
         <button onclick="editCampaign(${index})">✏️ Edit</button>
         <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>
       </td>
-    `;
+      `;
+    } else {
+      row.innerHTML += `<td></td>`;
+    }
     campaignTableBody.appendChild(row);
   });
 }
 
 /* -----------------------------------
-   7. DELETE CAMPAIGN
-   With error handling & toast feedback
+   DELETE CAMPAIGN - Remove document from Firestore
 ----------------------------------- */
 async function deleteCampaign(index) {
   const campaignToDelete = campaigns[index];
@@ -218,10 +271,9 @@ async function deleteCampaign(index) {
     showErrorToast("Cannot delete campaign, no valid ID found.");
     return;
   }
-  // Show spinner
   showSavingModal();
   try {
-    await deleteDoc(doc(db, `campaigns_${selectedYear}`, campaignToDelete.id));
+    await deleteDoc(docFS(db, `campaigns_${selectedYear}`, campaignToDelete.id));
     showSuccessToast("Campaign deleted successfully!");
   } catch (error) {
     console.error("Error deleting campaign:", error);
@@ -232,9 +284,13 @@ async function deleteCampaign(index) {
 }
 
 /* -----------------------------------
-   8. EDIT CAMPAIGN - Inline editing
+   EDIT CAMPAIGN - Inline editing (admin only)
 ----------------------------------- */
 function editCampaign(index) {
+  if (currentUserRole !== "admin") {
+    showErrorToast("You do not have permission to edit campaigns.");
+    return;
+  }
   const campaign = campaigns[index];
   const campaignTableBody = document.querySelector("#campaignTable tbody");
   const row = campaignTableBody.rows[index];
@@ -251,17 +307,12 @@ function editCampaign(index) {
     <td>
       <img class="editImagePreview" src="${campaign.imageUrl || ''}" width="50" alt="Campaign Image">
       <br>
-      <input type="file" id="editImage${index}" class="editImageInput" accept="image/*"
-             style="display: none;"
-             onchange="updateEditImagePreview(${index}, this)">
+      <input type="file" id="editImage${index}" class="editImageInput" accept="image/*" style="display: none;" onchange="updateEditImagePreview(${index}, this)">
       <button type="button" onclick="triggerEditImage(this)">Change Image</button>
       <br>
-      ${
-        campaign.imageUrl 
-          ? `<a href="${campaign.imageUrl}" download="campaign-image.png"
-                class="download-btn">Download</a>` 
-          : ""
-      }
+      ${campaign.imageUrl 
+        ? `<a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>` 
+        : ""}
     </td>
     <td>
       <button onclick="saveEditedCampaign(${index})">💾 Save</button>
@@ -271,14 +322,14 @@ function editCampaign(index) {
 }
 
 /* -----------------------------------
-   9. CANCEL EDIT - Re-displays table
+   CANCEL EDIT - Restore original display
 ----------------------------------- */
 function cancelEdit() {
   displayCampaigns();
 }
 
 /* -----------------------------------
-   Trigger file input in edit mode
+   TRIGGER FILE INPUT (for edit mode)
 ----------------------------------- */
 function triggerEditImage(button) {
   const row = button.closest("tr");
@@ -287,7 +338,7 @@ function triggerEditImage(button) {
 }
 
 /* -----------------------------------
-   Update preview image on new file in edit mode
+   UPDATE PREVIEW IMAGE on file selection
 ----------------------------------- */
 function updateEditImagePreview(index, inputElement) {
   const file = inputElement.files[0];
@@ -305,8 +356,7 @@ function updateEditImagePreview(index, inputElement) {
 }
 
 /* -----------------------------------
-   10. SAVE EDITED CAMPAIGN - update doc
-   With error handling, spinner, toast feedback
+   SAVE EDITED CAMPAIGN - Update Firestore doc
 ----------------------------------- */
 async function saveEditedCampaign(index) {
   const updated = { ...campaigns[index] };
@@ -322,9 +372,9 @@ async function saveEditedCampaign(index) {
   updated.endDate = document.getElementById(`editEndDate${index}`).value;
   updated.engagementNotes = document.getElementById(`editEngagementNotes${index}`).value;
 
-  // Basic validation: brand, campaignName, startDate, endDate
+  // Basic validation
   if (!updated.brand || !updated.campaignName || !updated.startDate || !updated.endDate) {
-    showErrorToast("Please fill out brand, campaign name, start/end dates.");
+    showErrorToast("Please fill out brand, campaign name, and start/end dates.");
     return;
   }
   if (new Date(updated.endDate) < new Date(updated.startDate)) {
@@ -332,7 +382,6 @@ async function saveEditedCampaign(index) {
     return;
   }
 
-  // Check for new image
   const imageInput = document.getElementById(`editImage${index}`);
   showSavingModal();
   try {
@@ -345,7 +394,6 @@ async function saveEditedCampaign(index) {
       };
       reader.readAsDataURL(imageInput.files[0]);
     } else {
-      // No new image
       await updateCampaignInFirestore(selectedYear, updated);
       hideSavingModal();
     }
@@ -357,7 +405,7 @@ async function saveEditedCampaign(index) {
 }
 
 /* -----------------------------------
-   updateCampaignInFirestore: updates doc in Firestore
+   updateCampaignInFirestore: Update Firestore doc
 ----------------------------------- */
 async function updateCampaignInFirestore(year, updated) {
   if (!updated.id) {
@@ -365,7 +413,7 @@ async function updateCampaignInFirestore(year, updated) {
     return;
   }
   try {
-    const docRef = doc(db, `campaigns_${year}`, updated.id);
+    const docRef = docFS(db, `campaigns_${year}`, updated.id);
     const { id, ...dataToSave } = updated;
     await updateDoc(docRef, dataToSave);
     showSuccessToast("Campaign updated successfully!");
@@ -376,27 +424,25 @@ async function updateCampaignInFirestore(year, updated) {
 }
 
 /* -----------------------------------
-   11. OPEN IMAGE IN NEW TAB
+   OPEN IMAGE IN NEW TAB
 ----------------------------------- */
 function openImage(url) {
   window.open(url, "_blank");
 }
 
 /* -----------------------------------
-   12. DEFAULT YEAR ON LOAD
+   DEFAULT YEAR ON LOAD
 ----------------------------------- */
 window.onload = function () {
   showYear("2025");
 };
 
-/* 
-   =============== NEW: Spinner & Toast Helpers ===============
-   Make sure index.html has:
+/* ====================================
+   SPINNER & TOAST HELPERS
+   Ensure your HTML has:
    <div id="savingModal" class="saving-modal" style="display:none;">...</div>
    <div id="toastContainer" class="toast-container"></div>
-*/
-
-/* Show/Hide Spinner */
+==================================== */
 function showSavingModal() {
   const modal = document.getElementById("savingModal");
   if (modal) modal.style.display = "flex";
@@ -405,8 +451,6 @@ function hideSavingModal() {
   const modal = document.getElementById("savingModal");
   if (modal) modal.style.display = "none";
 }
-
-/* Toasts for success/error feedback */
 function showSuccessToast(message) {
   createToast(message, "toast-success");
 }
@@ -420,17 +464,15 @@ function createToast(message, className) {
   toast.className = `toast-message ${className}`;
   toast.textContent = message;
   container.appendChild(toast);
-
-  // Auto-remove after 3s
+  // Remove after 3s
   setTimeout(() => {
     if (container.contains(toast)) container.removeChild(toast);
   }, 3000);
 }
 
-/* 
-   =============== EXPOSE FUNCTIONS FOR HTML EVENT HANDLERS ===============
-*/
-window.showYear = showYear;
+/* ====================================
+   EXPOSE FUNCTIONS FOR INLINE EVENT HANDLERS
+==================================== */
 window.openImage = openImage;
 window.editCampaign = editCampaign;
 window.deleteCampaign = deleteCampaign;

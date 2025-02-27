@@ -1,55 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <h1>Admin Login</h1>
+  <form id="loginForm">
+    <label for="email">Email:</label>
+    <input type="email" id="email" required>
 
-    <h1>Admin Login</h1>
-    <form id="loginForm">
-        <label for="password">Enter Admin Password:</label>
-        
-        <!-- Group the password input and the toggle button -->
-        <div style="margin-bottom: 1em;">
-            <input type="password" id="password" required>
-            <button type="button" id="togglePassword">Show</button>
-        </div>
+    <label for="password">Password:</label>
+    <input type="password" id="password" required>
 
-        <button type="submit">Login</button>
-    </form>
+    <button type="submit">Login</button>
+  </form>
+  
+  <!-- Link to sign up page -->
+  <p>Don't have an account? <a href="signup.html">Sign up</a></p>
+  
+  <!-- "Forgot Password?" link -->
+  <p><a href="#" id="forgotPasswordLink">Forgot your password?</a></p>
 
-    <script>
-        // 1) Toggle password visibility
-        const passwordInput = document.getElementById("password");
-        const togglePasswordBtn = document.getElementById("togglePassword");
+  <!-- Hidden Password Reset Form -->
+  <div id="resetFormContainer" style="display:none; margin-top:20px;">
+    <h2>Reset Password</h2>
+    <label for="resetEmail">Enter your email:</label>
+    <input type="email" id="resetEmail" required>
+    <button id="resetButton">Send Password Reset Email</button>
+  </div>
 
-        togglePasswordBtn.addEventListener("click", function () {
-            if (passwordInput.type === "password") {
-                passwordInput.type = "text";
-                togglePasswordBtn.textContent = "Hide";
-            } else {
-                passwordInput.type = "password";
-                togglePasswordBtn.textContent = "Show";
-            }
-        });
+  <script type="module">
+    import { auth } from "./firebaseSync.js";
+    import { 
+      signInWithEmailAndPassword,
+      sendPasswordResetEmail 
+    } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
 
-        // 2) Handle login logic
-        document.getElementById("loginForm").addEventListener("submit", function(event) {
-            event.preventDefault();
-            const enteredPassword = passwordInput.value;
-            const correctPassword = "marketing123"; // Set your actual password
+    // Handle Login Form Submission
+    document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        // Successful login - redirect to Admin Panel
+        window.location.href = "index.html";
+      } catch (error) {
+        console.error("Login error:", error);
+        alert("Login failed. Please check your email and password.");
+      }
+    });
 
-            if (enteredPassword === correctPassword) {
-                sessionStorage.setItem("adminAuth", correctPassword); // Store authentication
-                window.location.href = "index.html"; // Redirect to Admin Panel
-            } else {
-                alert("Incorrect password!"); // Show error message
-            }
-        });
-    </script>
+    // Toggle display of the password reset form
+    document.getElementById("forgotPasswordLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      const resetContainer = document.getElementById("resetFormContainer");
+      resetContainer.style.display = resetContainer.style.display === "none" ? "block" : "none";
+    });
 
+    // Handle Password Reset
+    document.getElementById("resetButton").addEventListener("click", async () => {
+      const resetEmail = document.getElementById("resetEmail").value;
+      try {
+        await sendPasswordResetEmail(auth, resetEmail);
+        alert("Password reset email sent! Please check your inbox.");
+      } catch (error) {
+        console.error("Password reset error:", error);
+        alert("Failed to send password reset email. Please try again.");
+      }
+    });
+  </script>
 </body>
 </html>

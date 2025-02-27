@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - Brand Visibility Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Create an Account</h1>
+  <form id="signupForm">
+    <label for="displayName">Full Name:</label>
+    <input type="text" id="displayName" required>
+    <br>
+    <label for="email">Email:</label>
+    <input type="email" id="email" required>
+    <br>
+    <label for="password">Password:</label>
+    <input type="password" id="password" required>
+    <br>
+    <button type="submit">Sign Up</button>
+  </form>
+
+  <script type="module">
+    import { auth, db } from "./firebaseSync.js";
+    import { createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+    import { doc, setDoc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+
+    document.getElementById("signupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const displayName = document.getElementById("displayName").value;
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      try {
+        // Create a new user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Update user profile with display name
+        await updateProfile(user, { displayName });
+
+        // Store user details in Firestore (default role: "viewer")
+        await setDoc(doc(db, "users", user.uid), {
+          displayName: displayName,
+          email: email,
+          role: "viewer" // Default role
+        });
+
+        alert("Sign-up successful! Redirecting...");
+        window.location.href = "dashboard.html"; // Redirect to dashboard
+      } catch (error) {
+        console.error("Signup error:", error);
+        alert("Signup failed: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>
+

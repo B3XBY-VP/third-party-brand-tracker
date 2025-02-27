@@ -4,6 +4,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
 
 // 2. Initialize Firebase with your project configuration
 const firebaseConfig = {
@@ -19,12 +20,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 
-// 3. Initialize Firestore
+// 3. Initialize Firestore and Auth
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-// 4. Expose `db` globally for use in other modules
+// 4. Expose `db` and `auth` globally for use in other modules if needed
 window.db = db;
+window.auth = auth;
 
 // 5. Additional Firestore-specific logic (e.g., listeners, writes) can be added here.
 
-export { db };
+export { db, auth };

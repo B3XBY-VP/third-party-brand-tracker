@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Brand Visibility Tracker - Admin Panel</title>
   <!-- Link to external CSS -->
   <link rel="stylesheet" href="style.css" />
@@ -45,7 +45,7 @@
       display: flex;
       align-items: center;
       cursor: pointer;
-      position: relative; 
+      position: relative;
     }
     .user-name {
       margin-right: 8px;
@@ -61,7 +61,7 @@
       display: none;
       position: absolute;
       top: 50px;
-      right: 0; 
+      right: 0;
       background-color: #fff;
       color: #333;
       border: 1px solid #ccc;
@@ -80,6 +80,7 @@
     .user-menu button:hover {
       background-color: #eee;
     }
+
     .year-buttons {
       margin: 10px;
     }
@@ -88,6 +89,7 @@
       margin-right: 5px;
       cursor: pointer;
     }
+
     form {
       margin: 10px;
       display: flex;
@@ -115,9 +117,11 @@
       font-size: 1rem;
       border-radius: 4px;
     }
+
     h2 {
       margin-left: 10px;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -132,6 +136,7 @@
       padding: 8px;
       text-align: left;
     }
+
     .delete-btn {
       background-color: red;
       color: white;
@@ -149,6 +154,7 @@
       display: inline-block;
       margin-top: 5px;
     }
+
     /* New CSS for image editing */
     .image-upload-btn {
       background-color: #4caf50;
@@ -159,6 +165,7 @@
       border-radius: 4px;
       margin-top: 5px;
     }
+
     /* Saving Modal Styles */
     .saving-modal {
       position: fixed;
@@ -194,8 +201,12 @@
     }
   </style>
 </head>
-
 <body>
+
+  <!-- Load Firebase and Admin Logic as ES modules (top or bottom, either works) -->
+  <script type="module" src="firebaseSync.js"></script>
+  <script type="module" src="admin.js"></script>
+
   <!-- HEADER WITH LOGO, TITLE, DASHBOARD BUTTON, & USER MENU -->
   <header>
     <img src="images/logo.png" alt="Victorian Plumbing Logo" class="logo" />
@@ -203,6 +214,11 @@
 
     <!-- Button to view Dashboard -->
     <a href="dashboard.html" class="dashboard-button">View Dashboard</a>
+
+    <!-- Button to manage user roles (hidden by default) -->
+    <a href="userRoles.html" id="manageUsersButton" class="dashboard-button" style="display: none;">
+      Manage User Roles
+    </a>
 
     <!-- User Profile Menu -->
     <div class="user-profile" onclick="toggleUserMenu()">
@@ -273,7 +289,7 @@
     <label for="pageLocation">Page Location:</label>
     <select id="pageLocation">
       <!-- Long list of page locations -->
-<option value="Trade App Homepage (Deal of the Week)">Trade App Homepage (Deal of the Week)</option>
+      <option value="Trade App Homepage (Deal of the Week)">Trade App Homepage (Deal of the Week)</option>
       <option value="Homepage Tile 1">Homepage Tile 1</option>
       <option value="Homepage Tile 2">Homepage Tile 2</option>
       <option value="Homepage Tile 3">Homepage Tile 3</option>
@@ -398,10 +414,6 @@
   <!-- Toast Container (for success/error messages) -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <!-- ES Modules: Firebase + Admin Logic -->
-  <script type="module" src="firebaseSync.js"></script>
-  <script type="module" src="admin.js"></script>
-
   <!-- Inline JavaScript for image handling & user menu -->
   <script>
     /***************** IMAGE PREVIEW + SAVE *****************/
@@ -425,32 +437,6 @@
       }
     });
 
-    document.addEventListener("click", function(event) {
-      if (event.target.classList.contains("save-btn")) {
-        let row = event.target.closest("tr");
-        let fileInput = row.querySelector(".imageUpload");
-        let formData = new FormData();
-        if (fileInput.files.length > 0) {
-          formData.append("image", fileInput.files[0]);
-        }
-        // Example: append other details from the row if needed
-        formData.append("brand", row.cells[0].innerText);
-        formData.append("campaignName", row.cells[2].innerText);
-
-        // Example upload endpoint
-        fetch("upload-handler.php", {
-          method: "POST",
-          body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-          alert("Campaign updated successfully!");
-          location.reload();
-        })
-        .catch(error => console.error("Error updating campaign:", error));
-      }
-    });
-
     /***************** USER MENU + LOGOUT *****************/
     function toggleUserMenu() {
       const menu = document.getElementById("userMenu");
@@ -461,15 +447,17 @@
     window.addEventListener("click", function(event) {
       const menu = document.getElementById("userMenu");
       const userProfile = document.querySelector(".user-profile");
-      if (event.target !== userProfile && !userProfile.contains(event.target)
-          && event.target !== menu && !menu.contains(event.target)) {
+      if (
+        event.target !== userProfile &&
+        !userProfile.contains(event.target) &&
+        event.target !== menu &&
+        !menu.contains(event.target)
+      ) {
         menu.style.display = "none";
       }
     });
 
-    function logout() {
-      window.location.href = "login.html";
-    }
+    // The logout() function is provided by admin.js via window.logout.
   </script>
 </body>
 </html>
