@@ -80,7 +80,6 @@
     .user-menu button:hover {
       background-color: #eee;
     }
-
     .year-buttons {
       margin: 10px;
     }
@@ -89,7 +88,6 @@
       margin-right: 5px;
       cursor: pointer;
     }
-
     form {
       margin: 10px;
       display: flex;
@@ -117,11 +115,9 @@
       font-size: 1rem;
       border-radius: 4px;
     }
-
     h2 {
       margin-left: 10px;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
@@ -136,7 +132,6 @@
       padding: 8px;
       text-align: left;
     }
-
     .delete-btn {
       background-color: red;
       color: white;
@@ -154,7 +149,6 @@
       display: inline-block;
       margin-top: 5px;
     }
-
     /* New CSS for image editing */
     .image-upload-btn {
       background-color: #4caf50;
@@ -165,7 +159,6 @@
       border-radius: 4px;
       margin-top: 5px;
     }
-
     /* Saving Modal Styles */
     .saving-modal {
       position: fixed;
@@ -203,11 +196,11 @@
 </head>
 <body>
 
-  <!-- Load Firebase and Admin Logic as ES modules (top or bottom, either works) -->
+  <!-- Load Firebase and Admin Logic as ES modules -->
   <script type="module" src="firebaseSync.js"></script>
   <script type="module" src="admin.js"></script>
 
-  <!-- HEADER WITH LOGO, TITLE, DASHBOARD BUTTON, & USER MENU -->
+  <!-- HEADER WITH LOGO, TITLE, DASHBOARD BUTTON, USER MENU, & Manage User Roles -->
   <header>
     <img src="images/logo.png" alt="Victorian Plumbing Logo" class="logo" />
     <h1 class="admin-title">Brand Visibility Tracker - Admin Panel</h1>
@@ -215,7 +208,7 @@
     <!-- Button to view Dashboard -->
     <a href="dashboard.html" class="dashboard-button">View Dashboard</a>
 
-    <!-- Button to manage user roles (hidden by default) -->
+    <!-- Button to manage user roles (shown for admins) -->
     <a href="userRoles.html" id="manageUsersButton" class="dashboard-button" style="display: none;">
       Manage User Roles
     </a>
@@ -243,7 +236,7 @@
   <!-- Current Year Title -->
   <h2 id="yearTitle">Campaigns for 2025</h2>
 
-  <!-- ADMIN FORM -->
+  <!-- ADMIN FORM (visible only to admins) -->
   <form id="campaignForm">
     <label for="brand">Brand:</label>
     <select id="brand" required>
@@ -337,7 +330,8 @@
       <option value="Search Merch 4">Search Merch 4</option>
       <option value="Search Merch 5">Search Merch 5</option>
       <option value="Search Merch 6">Search Merch 6</option>
-      <option value="Search Merch 7">Search Merch 8</option>
+      <option value="Search Merch 7">Search Merch 7</option>
+      <option value="Search Merch 8">Search Merch 8</option>
       <option value="Search Merch 9">Search Merch 9</option>
       <option value="Sale Merch 10">Sale Merch 10</option>
       <option value="Accessories Banner 1">Accessories Banner 1</option>
