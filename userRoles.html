@@ -83,7 +83,9 @@
 </head>
 <body>
   <h1>Admin Panel: Manage User Roles</h1>
-  <p>Only admins can update user roles. <br>(Delete button hidden for <strong>jjones544800@gmail.com</strong>)</p>
+  <p>Only admins can update user roles.<br>
+     (Delete button hidden for <strong>jjones544800@gmail.com</strong>)
+  </p>
 
   <!-- Table to display user documents -->
   <table id="usersTable">
@@ -108,10 +110,9 @@
   <!-- Toast container for notifications -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <!-- Firebase + Firestore + Auth imports -->
   <script type="module">
     import { auth, db } from "./firebaseSync.js";
-    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
     import {
       collection,
       doc,
@@ -168,6 +169,11 @@
           const userData = docSnap.data();
           const userId = docSnap.id;
 
+          // Normalize both emails for comparison
+          const userEmailNormalized = (userData.email || "").trim().toLowerCase();
+          const superAdminNormalized = SUPER_ADMIN_EMAIL.trim().toLowerCase();
+          const canDelete = userEmailNormalized !== superAdminNormalized;
+
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${userData.name || "N/A"}</td>
@@ -175,15 +181,14 @@
             <td>${userData.role || "N/A"}</td>
             <td>
               <select class="newRoleSelect">
-                <option value="admin"  ${userData.role === "admin" ? "selected" : ""}>Admin</option>
+                <option value="admin"  ${userData.role === "admin"  ? "selected" : ""}>Admin</option>
                 <option value="viewer" ${userData.role === "viewer" ? "selected" : ""}>Viewer</option>
               </select>
             </td>
             <td>
               <button class="btn" onclick="updateUserRole('${userId}', this)">Update</button>
               ${
-                // Show a Delete button for everyone EXCEPT the super-admin email
-                userData.email !== SUPER_ADMIN_EMAIL
+                canDelete
                   ? `<button class="btn" style="background-color:red;" onclick="deleteUser('${userId}')">Delete</button>`
                   : ""
               }
@@ -247,5 +252,3 @@
   </script>
 </body>
 </html>
-
-
