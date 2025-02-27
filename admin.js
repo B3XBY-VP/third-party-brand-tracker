@@ -1,7 +1,7 @@
 /****************************************************
  * admin.js - Firestore Version (Real-Time Sync)
  * With Error Handling, Form Validation, Loading Spinner,
- * Toast Messages, Logout, and Role-Based UI
+ * Toast Messages, Logout, Role-Based UI, and Undo/Redo
  ****************************************************/
 
 // --- Authentication Check & Role Retrieval ---
@@ -32,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById("campaignForm").style.display = "block";
           }
         } else {
-          // If the user is a viewer, hide the campaign form
+          // For viewers, hide the campaign form so they can only view
           if (document.getElementById("campaignForm")) {
             document.getElementById("campaignForm").style.display = "none";
           }
@@ -60,7 +60,7 @@ function logout() {
       alert("Failed to log out. Please try again.");
     });
 }
-window.logout = logout; // Expose logout globally so HTML can call it
+window.logout = logout; // Expose logout globally
 
 // --- Firestore Setup ---
 import {
@@ -74,6 +74,10 @@ import {
 
 // In-memory array for campaigns
 let campaigns = [];
+
+// Global objects for undo/redo histories (keyed by edit index)
+let editHistories = {};
+let redoHistories = {};
 
 /* -----------------------------------
    SHOW YEAR - Called by the year buttons
@@ -104,24 +108,17 @@ function watchCampaigns(year) {
 }
 
 /* -----------------------------------
-   FORM SUBMISSION - Add new campaign
-   With validation & loading spinner (admin only)
+   FORM SUBMISSION - Add new campaign (admin only)
 ----------------------------------- */
 if (document.getElementById("campaignForm")) {
   document.getElementById("campaignForm").addEventListener("submit", async function (event) {
     event.preventDefault();
-
-    // Only allow submission if user is admin
     if (currentUserRole !== "admin") {
       showErrorToast("You do not have permission to add campaigns.");
       return;
     }
-
-    // Identify the selected year from the heading
     const yearText = document.getElementById("yearTitle").textContent;
     const selectedYear = yearText.split(" ")[2];
-
-    // Gather form fields
     const brand = document.getElementById("brand").value;
     const saleMonth = document.getElementById("saleMonth").value;
     const campaignName = document.getElementById("campaignName").value;
@@ -132,7 +129,6 @@ if (document.getElementById("campaignForm")) {
     const engagementNotes = document.getElementById("engagementNotes").value;
     const imageFile = document.getElementById("campaignImage").files[0];
 
-    // Basic validation
     if (!brand || !campaignName || !startDate || !endDate) {
       showErrorToast("Please fill out all required fields (brand, campaign name, start/end dates).");
       return;
@@ -190,7 +186,6 @@ if (document.getElementById("campaignForm")) {
 
 /* -----------------------------------
    SAVE CAMPAIGN - Add document to Firestore
-   With error handling & toast feedback
 ----------------------------------- */
 async function saveCampaignToFirestore(year, campaignData) {
   try {
@@ -204,7 +199,7 @@ async function saveCampaignToFirestore(year, campaignData) {
 }
 
 /* -----------------------------------
-   DATE FORMATTER - Converts "YYYY-MM-DD" to "DD/MM/YYYY"
+   DATE FORMATTER
 ----------------------------------- */
 function formatDateToDMY(isoString) {
   if (!isoString) return "";
@@ -214,22 +209,24 @@ function formatDateToDMY(isoString) {
 
 /* -----------------------------------
    DISPLAY CAMPAIGNS - Render campaigns in the table
-   For viewers, do not show edit/delete buttons.
+   For viewers, hide edit/delete buttons.
 ----------------------------------- */
 function displayCampaigns() {
   const campaignTableBody = document.querySelector("#campaignTable tbody");
   campaignTableBody.innerHTML = "";
-
   if (campaigns.length === 0) {
     campaignTableBody.innerHTML = "<tr><td colspan='10'>No campaigns added for this year.</td></tr>";
     return;
   }
-
   campaigns.forEach((campaign, index) => {
     const row = document.createElement("tr");
-    const actionsHTML = (currentUserRole === "admin") ?
-      `<button onclick="editCampaign(${index})">✏️ Edit</button>
-       <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>` : "";
+    let actionsHTML = "";
+    if (currentUserRole === "admin") {
+      actionsHTML = `
+        <button onclick="editCampaign(${index})">✏️ Edit</button>
+        <button class="delete-btn" onclick="deleteCampaign(${index})">❌ Delete</button>
+      `;
+    }
     row.innerHTML = `
       <td>${campaign.brand || ""}</td>
       <td>${campaign.saleMonth || ""}</td>
@@ -246,9 +243,7 @@ function displayCampaigns() {
              <a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>`
           : "No image"}
       </td>
-      <td>
-        ${actionsHTML}
-      </td>
+      <td>${actionsHTML}</td>
     `;
     campaignTableBody.appendChild(row);
   });
@@ -256,13 +251,11 @@ function displayCampaigns() {
 
 /* -----------------------------------
    DELETE CAMPAIGN - Remove document from Firestore
-   With error handling & toast feedback
 ----------------------------------- */
 async function deleteCampaign(index) {
   const campaignToDelete = campaigns[index];
   const yearText = document.getElementById("yearTitle").textContent;
   const selectedYear = yearText.split(" ")[2];
-
   if (!campaignToDelete?.id) {
     showErrorToast("Cannot delete campaign, no valid ID found.");
     return;
@@ -281,6 +274,7 @@ async function deleteCampaign(index) {
 
 /* -----------------------------------
    EDIT CAMPAIGN - Inline editing (admin only)
+   This now includes Undo and Redo buttons.
 ----------------------------------- */
 function editCampaign(index) {
   if (currentUserRole !== "admin") {
@@ -290,6 +284,10 @@ function editCampaign(index) {
   const campaign = campaigns[index];
   const campaignTableBody = document.querySelector("#campaignTable tbody");
   const row = campaignTableBody.rows[index];
+
+  // Initialize undo/redo history for this edit session
+  editHistories[index] = [Object.assign({}, campaign)]; // Store initial state
+  redoHistories[index] = [];
 
   row.innerHTML = `
     <td><input type="text" id="editBrand${index}" value="${campaign.brand || ""}"></td>
@@ -309,6 +307,8 @@ function editCampaign(index) {
       ${campaign.imageUrl ? `<a href="${campaign.imageUrl}" download="campaign-image.png" class="download-btn">Download</a>` : ""}
     </td>
     <td>
+      <button onclick="undoEdit(${index})">Undo</button>
+      <button onclick="redoEdit(${index})">Redo</button>
       <button onclick="saveEditedCampaign(${index})">💾 Save</button>
       <button onclick="cancelEdit()">Cancel</button>
     </td>
@@ -316,7 +316,7 @@ function editCampaign(index) {
 }
 
 /* -----------------------------------
-   CANCEL EDIT - Restore original display
+   CANCEL EDIT - Restore display
 ----------------------------------- */
 function cancelEdit() {
   displayCampaigns();
@@ -350,8 +350,74 @@ function updateEditImagePreview(index, inputElement) {
 }
 
 /* -----------------------------------
+   UNDO & REDO FUNCTIONS
+----------------------------------- */
+function undoEdit(index) {
+  if (!editHistories[index] || editHistories[index].length < 2) {
+    showErrorToast("Nothing to undo.");
+    return;
+  }
+  // Pop the current state and push it into redo history
+  const currentState = editHistories[index].pop();
+  if (!redoHistories[index]) {
+    redoHistories[index] = [];
+  }
+  redoHistories[index].push(currentState);
+  // Get the previous state from the undo history
+  const previousState = editHistories[index][editHistories[index].length - 1];
+  // Update input fields
+  document.getElementById(`editBrand${index}`).value = previousState.brand;
+  document.getElementById(`editSaleMonth${index}`).value = previousState.saleMonth;
+  document.getElementById(`editCampaignName${index}`).value = previousState.campaignName;
+  document.getElementById(`editCampaignType${index}`).value = previousState.campaignType;
+  document.getElementById(`editPageLocation${index}`).value = previousState.pageLocation;
+  document.getElementById(`editStartDate${index}`).value = previousState.startDate;
+  document.getElementById(`editEndDate${index}`).value = previousState.endDate;
+  document.getElementById(`editEngagementNotes${index}`).value = previousState.engagementNotes;
+  // Update image preview if applicable
+  const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
+  if (preview) preview.src = previousState.imageUrl || "";
+  showSuccessToast("Undo successful.");
+}
+
+function redoEdit(index) {
+  if (!redoHistories[index] || redoHistories[index].length === 0) {
+    showErrorToast("Nothing to redo.");
+    return;
+  }
+  const nextState = redoHistories[index].pop();
+  // Get current state from inputs and push it to undo history
+  const currentState = {
+    brand: document.getElementById(`editBrand${index}`).value,
+    saleMonth: document.getElementById(`editSaleMonth${index}`).value,
+    campaignName: document.getElementById(`editCampaignName${index}`).value,
+    campaignType: document.getElementById(`editCampaignType${index}`).value,
+    pageLocation: document.getElementById(`editPageLocation${index}`).value,
+    startDate: document.getElementById(`editStartDate${index}`).value,
+    endDate: document.getElementById(`editEndDate${index}`).value,
+    engagementNotes: document.getElementById(`editEngagementNotes${index}`).value,
+    imageUrl: document.querySelector(`#editImage${index} ~ .editImagePreview`)?.src || ""
+  };
+  if (!editHistories[index]) {
+    editHistories[index] = [];
+  }
+  editHistories[index].push(currentState);
+  // Apply nextState to inputs
+  document.getElementById(`editBrand${index}`).value = nextState.brand;
+  document.getElementById(`editSaleMonth${index}`).value = nextState.saleMonth;
+  document.getElementById(`editCampaignName${index}`).value = nextState.campaignName;
+  document.getElementById(`editCampaignType${index}`).value = nextState.campaignType;
+  document.getElementById(`editPageLocation${index}`).value = nextState.pageLocation;
+  document.getElementById(`editStartDate${index}`).value = nextState.startDate;
+  document.getElementById(`editEndDate${index}`).value = nextState.endDate;
+  document.getElementById(`editEngagementNotes${index}`).value = nextState.engagementNotes;
+  const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
+  if (preview) preview.src = nextState.imageUrl || "";
+  showSuccessToast("Redo successful.");
+}
+
+/* -----------------------------------
    SAVE EDITED CAMPAIGN - Update Firestore doc
-   With error handling, loading spinner, and toast feedback
 ----------------------------------- */
 async function saveEditedCampaign(index) {
   const updated = { ...campaigns[index] };
@@ -367,7 +433,6 @@ async function saveEditedCampaign(index) {
   updated.endDate = document.getElementById(`editEndDate${index}`).value;
   updated.engagementNotes = document.getElementById(`editEngagementNotes${index}`).value;
 
-  // Basic validation
   if (!updated.brand || !updated.campaignName || !updated.startDate || !updated.endDate) {
     showErrorToast("Please fill out brand, campaign name, and start/end dates.");
     return;
@@ -400,7 +465,7 @@ async function saveEditedCampaign(index) {
 }
 
 /* -----------------------------------
-   updateCampaignInFirestore: updates the existing doc in Firestore
+   updateCampaignInFirestore: updates the Firestore doc
 ----------------------------------- */
 async function updateCampaignInFirestore(year, updated) {
   if (!updated.id) {
@@ -474,3 +539,69 @@ window.triggerEditImage = triggerEditImage;
 window.updateEditImagePreview = updateEditImagePreview;
 window.saveEditedCampaign = saveEditedCampaign;
 window.cancelEdit = cancelEdit;
+window.undoEdit = undoEdit;
+window.redoEdit = redoEdit;
+
+/* -----------------------------------
+   UNDO & REDO FUNCTIONS
+----------------------------------- */
+let editHistories = {}; // key: edit index, value: array of previous states
+let redoHistories = {}; // key: edit index, value: array of undone states
+
+function undoEdit(index) {
+  if (!editHistories[index] || editHistories[index].length < 2) {
+    showErrorToast("Nothing to undo.");
+    return;
+  }
+  const currentState = editHistories[index].pop();
+  if (!redoHistories[index]) {
+    redoHistories[index] = [];
+  }
+  redoHistories[index].push(currentState);
+  const previousState = editHistories[index][editHistories[index].length - 1];
+  document.getElementById(`editBrand${index}`).value = previousState.brand;
+  document.getElementById(`editSaleMonth${index}`).value = previousState.saleMonth;
+  document.getElementById(`editCampaignName${index}`).value = previousState.campaignName;
+  document.getElementById(`editCampaignType${index}`).value = previousState.campaignType;
+  document.getElementById(`editPageLocation${index}`).value = previousState.pageLocation;
+  document.getElementById(`editStartDate${index}`).value = previousState.startDate;
+  document.getElementById(`editEndDate${index}`).value = previousState.endDate;
+  document.getElementById(`editEngagementNotes${index}`).value = previousState.engagementNotes;
+  const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
+  if (preview) preview.src = previousState.imageUrl || "";
+  showSuccessToast("Undo successful.");
+}
+
+function redoEdit(index) {
+  if (!redoHistories[index] || redoHistories[index].length === 0) {
+    showErrorToast("Nothing to redo.");
+    return;
+  }
+  const nextState = redoHistories[index].pop();
+  const currentState = {
+    brand: document.getElementById(`editBrand${index}`).value,
+    saleMonth: document.getElementById(`editSaleMonth${index}`).value,
+    campaignName: document.getElementById(`editCampaignName${index}`).value,
+    campaignType: document.getElementById(`editCampaignType${index}`).value,
+    pageLocation: document.getElementById(`editPageLocation${index}`).value,
+    startDate: document.getElementById(`editStartDate${index}`).value,
+    endDate: document.getElementById(`editEndDate${index}`).value,
+    engagementNotes: document.getElementById(`editEngagementNotes${index}`).value,
+    imageUrl: document.querySelector(`#editImage${index} ~ .editImagePreview`)?.src || ""
+  };
+  if (!editHistories[index]) {
+    editHistories[index] = [];
+  }
+  editHistories[index].push(currentState);
+  document.getElementById(`editBrand${index}`).value = nextState.brand;
+  document.getElementById(`editSaleMonth${index}`).value = nextState.saleMonth;
+  document.getElementById(`editCampaignName${index}`).value = nextState.campaignName;
+  document.getElementById(`editCampaignType${index}`).value = nextState.campaignType;
+  document.getElementById(`editPageLocation${index}`).value = nextState.pageLocation;
+  document.getElementById(`editStartDate${index}`).value = nextState.startDate;
+  document.getElementById(`editEndDate${index}`).value = nextState.endDate;
+  document.getElementById(`editEngagementNotes${index}`).value = nextState.engagementNotes;
+  const preview = document.querySelector(`#editImage${index} ~ .editImagePreview`);
+  if (preview) preview.src = nextState.imageUrl || "";
+  showSuccessToast("Redo successful.");
+}
